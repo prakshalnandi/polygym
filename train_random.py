@@ -77,7 +77,9 @@ def gen_and_bench_random_schedule(env, sample_name, sampling_bias=None, predef_a
             state, reward, done, info = env.step(action)
 
         speedup = env.reward_to_speedup(reward)
+        print('speedup :' + str(speedup))
         exec_time = env.speedup_to_execution_time(speedup)
+        print('exectime :' + str(exec_time))
         status = info['status']
         ast = info['ast'] if 'ast' in info else None
         isl_map = info['isl_map'] if 'isl_map' in info else None
@@ -119,9 +121,10 @@ def main(argv):
     if FLAGS.with_baselines:
         clang_exes = [
                 None,
-                'clang-10',
-                '/tmp/llvm-10/build/bin/clang',
-                '/tmp/llvm-12/build/bin/clang',
+                '/home/s2136718/MLPC/llvm_root/llvm_build/bin/clang',
+                #'clang-10',
+                #'/tmp/llvm-10/build/bin/clang',
+                #'/tmp/llvm-12/build/bin/clang',
 #                '/tmp/llvm-master/build/bin/clang',
                 ]
         optimizations = ['O3', 'ISL']
@@ -137,7 +140,7 @@ def main(argv):
                     # Save result
                     append_to_csv(csv_filename, [optimization, clang_exe_used, exec_time])
     if FLAGS.with_isl_tuning:
-        clang_exe = '/media/local/brauckmann/llvm/llvm-12/build/bin/clang'
+        clang_exe = '/home/s2136718/MLPC/llvm_root/llvm_build/bin/clang'
 
         isl_options = {
                 'polly-opt-optimize-only': ['all', 'raw'],
@@ -192,8 +195,9 @@ def main(argv):
 
         to_process = list(polygym.polybench_invocations.keys())
 
-        i = 0
-        while True:
+        #i = 0
+        #while True:
+        for i in range(FLAGS.stop_at):
             print('to_process: ' + str(to_process))
             print('len(to_process): ' + str(len(to_process)))
 
@@ -217,7 +221,7 @@ def main(argv):
                 create_csv_if_not_exists(csv_filename, ['method', 'execution_time', 'status', 'actions', 'ast', 'isl_map'])
                 append_to_csv(csv_filename, ['PolyEnv-random', exec_time, status, str(actions), str(ast), str(isl_map)])
 
-            i += 1
+            #i += 1
 
     if FLAGS.with_action_import_sample_name and FLAGS.with_action_import_actions:
         env_config = {'invocations': polygym.polybench_invocations}
@@ -227,9 +231,9 @@ def main(argv):
         actions = eval(FLAGS.with_action_import_actions)
         exec_time, status, actions, ast, isl_map = gen_and_bench_random_schedule(env, sample_name, False, actions)
 
-        print(isl_map)
-        print(ast)
-        print(exec_time)
+        print('isl_map: ' + isl_map)
+        print('ast: '+ ast)
+        print('exec_time: '+ exec_time)
 
 if __name__ == "__main__":
     app.run(main)
