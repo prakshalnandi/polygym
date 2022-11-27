@@ -7,13 +7,14 @@ import time
 import gym
 import numpy as np
 from gym.spaces import Discrete, Box, Dict, Tuple
-#from ray.rllib.utils.spaces.repeated import Repeated
+from ray.rllib.utils.spaces.repeated import Repeated
 
 #import model
 import polygym
 #import representation
 import schedule_eval
 
+import pudb
 
 ILLEGAL_ACTION_REWARD = 0
 EXECUTION_TIME_CUTOFF_FACTOR = 1000  # Schedules beyond this factor wrt. O3 are terminated
@@ -54,29 +55,29 @@ class PolyEnv(gym.Env):
 
         self.action_space = Discrete(n_actions)
 
-#        graph_space = Dict({
-#            'x': Repeated(Discrete(MAX_NUM_NODE_TYPES), max_len=MAX_NUM_NODES),     # node features
-#            'edge_index': Tuple([Repeated(Box(low=0, high=MAX_NUM_NODES, shape=[1, 1]), max_len=MAX_NUM_EDGES)] * 2),
-#            'edge_features': Repeated(Box(low=0, high=MAX_NUM_EDGE_TYPES, shape=[1, 1]), max_len=MAX_NUM_EDGES)
-#        })
-#        self.observation_space = Dict({
+        self.graph_space = Dict({
+            'x': Repeated(Discrete(3), max_len=MAX_NUM_NODES),     # node features
+            'edge_index': Tuple([Repeated(Box(low=0, high=MAX_NUM_NODES, shape=[1, 1]), max_len=MAX_NUM_EDGES)] * 2),
+            'edge_features': Repeated(Box(low=0, high=MAX_NUM_EDGE_TYPES, shape=[1, 1]), max_len=MAX_NUM_EDGES)
+        })
+        self.observation_space = Dict({
 #            # Status
-#            "action_mask": Box(0, 1, shape=[n_actions, 1]),
+            "action_mask": Box(0, 1, shape=[n_actions, 1]),
 #
 #            # Construct
-#            "candidate_dep": graph_space,
-#            "available_deps": Repeated(graph_space, max_len=MAX_NUM_DEPS),
-#            "selected_deps_by_dim": Repeated(Repeated(graph_space, max_len=MAX_NUM_DEPS), max_len=MAX_NUM_DIMS),
+            "candidate_dep": self.graph_space,
+            "available_deps": Repeated(self.graph_space, max_len=MAX_NUM_DEPS),
+            "selected_deps_by_dim": Repeated(Repeated(self.graph_space, max_len=MAX_NUM_DEPS), max_len=MAX_NUM_DIMS),
 #
 #            # Explore
-#            'current_coeff_vector': Box(0, 1, shape=[1, 1]),
-#            'current_term_candidate_vector': Box(0, 1, shape=[1, 1]),
-#            'current_dim_deps': Box(0, 1, shape=[1, 1]),
-#            'future_deps_by_dim': Box(0, 1, shape=[1, 1]),
+            'current_coeff_vector': Box(0, 1, shape=[1, 1]),
+            'current_term_candidate_vector': Box(0, 1, shape=[1, 1]),
+            'current_dim_deps': Box(0, 1, shape=[1, 1]),
+            'future_deps_by_dim': Box(0, 1, shape=[1, 1]),
 #
-#            'previous_deps_by_dim': Box(0, 1, shape=[1, 1]),
-#            'previous_coeff_vectors': Box(0, 1, shape=[1, 1]),
-#        })
+            'previous_deps_by_dim': Box(0, 1, shape=[1, 1]),
+            'previous_coeff_vectors': Box(0, 1, shape=[1, 1]),
+        })
 
     def _set_sample(self, sample_name):
         if not sample_name:
@@ -188,6 +189,12 @@ class PolyEnv(gym.Env):
         self.num_steps = 0
         self.last_reward = 0
 
+        self.obs = [None] * 4
+        self.strongDepForDim = 0
+        self.DepNum = 0
+        
+        self.obs2 = [[None],[None]]
+
         self._carry_uncarried_deps_weakly()
 
         state = {
@@ -202,18 +209,32 @@ class PolyEnv(gym.Env):
                     else np.concatenate([np.zeros(3), np.ones(3)]),
 
                 # Construct
-                'candidate_dep': self.sample['dep_reps_by_deps'][self.availableDeps[self.dep_ptr]],
-                'available_deps': [self.sample['dep_reps_by_deps'][depLeft] for depLeft in self.availableDeps],
-                'selected_deps_by_dim': [[]],
+                'candidate_dep': self.graph_space,
+                'available_deps': Repeated(self.graph_space, max_len=MAX_NUM_DEPS),
+                'selected_deps_by_dim': Repeated(Repeated(self.graph_space, max_len=MAX_NUM_DEPS), max_len=MAX_NUM_DIMS),
+#
+#               # Explore
+                'current_coeff_vector': Box(0, 1, shape=[1, 1]),
+                'current_term_candidate_vector': Box(0, 1, shape=[1, 1]),
+                'current_dim_deps': Box(0, 1, shape=[1, 1]),
+                'future_deps_by_dim': Box(0, 1, shape=[1, 1]),
+#
+                'previous_deps_by_dim': Box(0, 1, shape=[1, 1]),
+                'previous_coeff_vectors': Box(0, 1, shape=[1, 1]),
 
-                # Explore
-                'current_coeff_vector': np.zeros([10]),
-                'current_term_candidate_vector': np.zeros([10]),
-                'current_dim_deps': [representation.construct_null_dependency_graph()],
-                'future_deps_by_dim': [[representation.construct_null_dependency_graph()]],
+                ## Construct
+                #'candidate_dep': self.sample['dep_reps_by_deps'][self.availableDeps[self.dep_ptr]],
+                #'available_deps': [self.sample['dep_reps_by_deps'][depLeft] for depLeft in self.availableDeps],
+                #'selected_deps_by_dim': [[]],
 
-                'previous_deps_by_dim': [[representation.construct_null_dependency_graph()]],
-                'previous_coeff_vectors': [np.zeros([10])],
+                ## Explore
+                #'current_coeff_vector': np.zeros([10]),
+                #'current_term_candidate_vector': np.zeros([10]),
+                #'current_dim_deps': [representation.construct_null_dependency_graph()],
+                #'future_deps_by_dim': [[representation.construct_null_dependency_graph()]],
+
+                #'previous_deps_by_dim': [[representation.construct_null_dependency_graph()]],
+                #'previous_coeff_vectors': [np.zeros([10])],
             })
 
         # self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = len(self.sample['deps']) * 2 + 1
@@ -309,22 +330,43 @@ class PolyEnv(gym.Env):
                     else np.concatenate([np.zeros(3), np.ones(3)]),
 
                 # Construct
-                'candidate_dep': representation.construct_null_dependency_graph(),
-                'available_deps': [representation.construct_null_dependency_graph()],
-                'selected_deps_by_dim': [[]],
+                "candidate_dep": self.graph_space,
+                "available_deps": Repeated(self.graph_space, max_len=MAX_NUM_DEPS),
+                "selected_deps_by_dim": Repeated(Repeated(self.graph_space, max_len=MAX_NUM_DEPS), max_len=MAX_NUM_DIMS),
+#
+#               # Explore
+                'current_coeff_vector': Box(0, 1, shape=[1, 1]),
+                'current_term_candidate_vector': Box(0, 1, shape=[1, 1]),
+                'current_dim_deps': Box(0, 1, shape=[1, 1]),
+                'future_deps_by_dim': Box(0, 1, shape=[1, 1]),
+#
+                'previous_deps_by_dim': Box(0, 1, shape=[1, 1]),
+                'previous_coeff_vectors': Box(0, 1, shape=[1, 1]),
+                   
+                ## Construct
+                #'candidate_dep': representation.construct_null_dependency_graph(),
+                #'available_deps': [representation.construct_null_dependency_graph()],
+                #'selected_deps_by_dim': [[]],
 
-                # Explore
-                'current_coeff_vector': np.zeros([10]),
-                'current_term_candidate_vector': np.zeros([10]),
-                'current_dim_deps': [representation.construct_null_dependency_graph()],
-                'future_deps_by_dim': [[representation.construct_null_dependency_graph()]],
+                ## Explore
+                #'current_cocurrent_dim_depseff_vector': np.zeros([10]),
+                #'current_term_candidate_vector': np.zeros([10]),
+                #'current_dim_deps': [representation.construct_null_dependency_graph()],
+                #'future_deps_by_dim': [[representation.construct_null_dependency_graph()]],
 
-                'previous_deps_by_dim': [[representation.construct_null_dependency_graph()]],
-                'previous_coeff_vectors': [np.zeros([10])],
+                #'previous_deps_by_dim': [[representation.construct_null_dependency_graph()]],
+                #'previous_coeff_vectors': [np.zeros([10])],
+                
             })
 
         # Construct
         if action in [Action.next_dim, Action.next_dep, Action.select_dep]:
+            self.obs[0] = self.dim_ptr
+            self.obs[1] = self.DepNum
+            self.obs[2] = self.strongDepForDim
+            self.obs[3] = len(self.availableDeps)
+            print("state before action", self.obs)
+            print("action",action)
             # Polyhedra construction
             if self.status != Status.construct_space:
                 raise Exception
@@ -333,6 +375,8 @@ class PolyEnv(gym.Env):
                 self._add_polyhedron()
                 self.dim_ptr += 1
                 self.dep_ptr = 0
+                
+                self.strongDepForDim = 0
 
                 self._complete_construct_maybe()
 
@@ -345,7 +389,12 @@ class PolyEnv(gym.Env):
                 dep = self.availableDeps[self.dep_ptr]
                 self.stronglyCarried.append(dep)
 
+                self.strongDepForDim += 1
+
                 del self.availableDeps[self.dep_ptr]
+
+                self.DepNum += 1
+                
 
                 if len(self.availableDeps) == 0:
                     self._complete_construct_maybe()
@@ -353,23 +402,37 @@ class PolyEnv(gym.Env):
                 if self.dep_ptr >= len(self.availableDeps):
                     self.dep_ptr = 0
 
+            self.obs[0] = self.dim_ptr
+            self.obs[1] = self.DepNum
+            self.obs[2] = self.strongDepForDim
+            self.obs[3] = len(self.availableDeps)
+            print("state after action", self.obs)
+
             # State
             if with_repr:
                 if len(self.availableDeps) > 0:
-                    state['candidate_dep'] = self.sample['dep_reps_by_deps'][self.availableDeps[self.dep_ptr]]
-
-                available_deps = [self.sample['dep_reps_by_deps'][dep] for dep in self.availableDeps if
+                    #commentdep state['candidate_dep'] = self.sample['dep_reps_by_deps'][self.availableDeps[self.dep_ptr]]
+                    state['candidate_dep'] = self.availableDeps[self.dep_ptr]
+                #commentdep available_deps = [self.sample['dep_reps_by_deps'][dep] for dep in self.availableDeps if
+                available_deps = [dep for dep in self.availableDeps if
                              self.availableDeps[self.dep_ptr] != dep]
                 if len(available_deps) > 0:
                     state['available_deps'] = available_deps
 
                 if len(self.schedulePolysDependences) > 0:
-                    state['selected_deps_by_dim'] = [[self.sample['dep_reps_by_deps'][dep] for dep in dim] for dim in self.schedulePolysDependences]
-
+                    #commentdep state['selected_deps_by_dim'] = [[self.sample['dep_reps_by_deps'][dep] for dep in dim] for dim in self.schedulePolysDependences]
+                    state['selected_deps_by_dim'] = [[dep for dep in dim] for dim in self.schedulePolysDependences]
+            
             reward = 0
 
         # Explore
         elif action in [Action.coeff_0, Action.coeff_pos1, Action.coeff_pos2]:
+            #pudb.set_trace()
+            #print("action")
+            print("action: ",action)
+            term, term_type = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)
+            self.obs2[1] = term
+            print("before action obs2", self.obs2)
             # Check for illegal actions
             if self.status != Status.explore_space:
                 raise Exception
@@ -402,6 +465,7 @@ class PolyEnv(gym.Env):
 
                 reward = 0
 
+            print("dim: ",self.dim_ptr)
             # Update ptrs for next step
             self.dim_ptr, self.term_ptr = self._get_incremented_ptrs(self.dim_ptr, self.term_ptr)
             done_explore = self.dim_ptr >= len(self.schedulePolys)
@@ -419,13 +483,16 @@ class PolyEnv(gym.Env):
             if with_repr:
                 coeff_vectors = [self._summands_to_coeff_vector([summand for _, summand in coeffs_and_summands]) for
                                  coeffs_and_summands in self.coeffs_and_summands_by_dim]
+                self.obs2[0] = coeff_vectors[self.dim_ptr]
                 state['current_coeff_vector'] = coeff_vectors[self.dim_ptr]
-
                 state['current_term_candidate_vector'] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
+                self.obs2[1] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
+                print("after action obs2", self.obs2)
 
                 previous_deps_by_dim = self.schedulePolysDependences[:self.dim_ptr]
                 if len(previous_deps_by_dim) > 0:
-                    state['previous_deps_by_dim'] = [[self.sample['dep_reps_by_deps'][dep] for dep in dim] for dim in previous_deps_by_dim]
+                    #commentdep state['previous_deps_by_dim'] = [[self.sample['dep_reps_by_deps'][dep] for dep in dim] for dim in previous_deps_by_dim]
+                    state['previous_deps_by_dim'] = [[dep for dep in dim] for dim in previous_deps_by_dim]
 
                 previous_coeff_vectors = coeff_vectors[:self.dim_ptr]
                 if len(previous_coeff_vectors) > 0:
@@ -439,18 +506,20 @@ class PolyEnv(gym.Env):
                         next_terms.append(ray)
                 state['next_terms'] = next_terms
 
-                current_dim_deps = [self.sample['dep_reps_by_deps'][dep] for dep in self.schedulePolysDependences[self.dim_ptr]]
+                current_dim_deps = [dep for dep in self.schedulePolysDependences[self.dim_ptr]]
+                #commentdep by s2136718 current_dim_deps = [self.sample['dep_reps_by_deps'][dep] for dep in self.schedulePolysDependences[self.dim_ptr]]
                 if len(current_dim_deps) > 0:
                     state['current_dim_deps'] = current_dim_deps
 
                 if (self.dim_ptr + 1) < len(self.schedulePolys):
-                    state['future_deps_by_dim'] = [[self.sample['dep_reps_by_deps'][dep] for dep in dim] for dim in self.schedulePolysDependences[self.dim_ptr+1:]]
-
+                    #commentdep by s2136718 state['future_deps_by_dim'] = [[self.sample['dep_reps_by_deps'][dep] for dep in dim] for dim in self.schedulePolysDependences[self.dim_ptr+1:]]
+                    state['future_deps_by_dim'] = [[dep for dep in dim] for dim in self.schedulePolysDependences[self.dim_ptr+1:]]
+        
         # Update action mask
         state['action_mask'] = np.concatenate([np.ones(3), np.zeros(3)]) if self.status == Status.construct_space \
             else np.concatenate([np.zeros(3), np.ones(3)])
 
-        # Limit actions
+        # Liself.dep_ptrmit actions
         if action == Action.next_dim:
             self.consecutive_next_dims += 1
         elif action == Action.select_dep:
@@ -511,7 +580,6 @@ class PolyEnv(gym.Env):
 
             sched.addScheduleVector(coeff_vector, summands)
 
-#        print(sched)
         # Integerize schedule vectors
         sched.scheduleVectors = [polygym.multiplyWithCommonDenominator(x) for x in sched.scheduleVectors]
 

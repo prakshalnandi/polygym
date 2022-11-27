@@ -43,7 +43,7 @@ def append_to_csv(filename, row):
 
 def gen_and_bench_random_schedule(env, sample_name, sampling_bias=None, predef_actions=None):
     with_ast_and_map = True if sample_name in ['gemm', 'matvect'] else False
-    state = env.reset(sample_name, with_ast_and_map=with_ast_and_map)
+    state = env.reset(sample_name, with_repr = True, with_ast_and_map=with_ast_and_map)
 
     actions = []
     done = False
@@ -74,7 +74,7 @@ def gen_and_bench_random_schedule(env, sample_name, sampling_bias=None, predef_a
             action = list(environment.Action)[action_idx]
             actions.append(action_idx)
 
-            state, reward, done, info = env.step(action)
+            state, reward, done, info = env.step(action, True)
 
         speedup = env.reward_to_speedup(reward)
         print('speedup :' + str(speedup))
