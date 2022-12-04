@@ -195,6 +195,8 @@ class PolyEnv(gym.Env):
         
         self.obs2 = [[None],[None]]
 
+        self.nstate = None
+
         self._carry_uncarried_deps_weakly()
 
         state = {
@@ -236,11 +238,18 @@ class PolyEnv(gym.Env):
                 #'previous_deps_by_dim': [[representation.construct_null_dependency_graph()]],
                 #'previous_coeff_vectors': [np.zeros([10])],
             })
+        
+        state2 = {
+            'action_mask': np.concatenate([np.ones(3), np.zeros(3)]) if self.status == Status.construct_space \
+                else np.concatenate([np.zeros(3), np.ones(3)]),
+            'observation': [None] * 4,
+        }
 
         # self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = len(self.sample['deps']) * 2 + 1
         self.MAX_CONSECUTIVE_NEXT_DIMS = 1
 
-        return self._filter_state(state, with_repr)
+        #return self._filter_state(state, with_repr)
+        return state2
 
     def _skip_vertices(self):
         while True:
@@ -359,6 +368,13 @@ class PolyEnv(gym.Env):
                 
             })
 
+        state2 = {
+            # Status
+            'action_mask': np.concatenate([np.ones(3), np.zeros(3)]) if self.status == Status.construct_space \
+                            else np.concatenate([np.zeros(3), np.ones(3)]),
+        }
+
+
         # Construct
         if action in [Action.next_dim, Action.next_dep, Action.select_dep]:
             self.obs[0] = self.dim_ptr
@@ -407,6 +423,8 @@ class PolyEnv(gym.Env):
             self.obs[2] = self.strongDepForDim
             self.obs[3] = len(self.availableDeps)
             print("state after action", self.obs)
+            self.nstate = self.obs
+            state2['observation'] = self.obs
 
             # State
             if with_repr:
@@ -429,10 +447,10 @@ class PolyEnv(gym.Env):
         elif action in [Action.coeff_0, Action.coeff_pos1, Action.coeff_pos2]:
             #pudb.set_trace()
             #print("action")
-            print("action: ",action)
+            ####print("action: ",action)
             term, term_type = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)
             self.obs2[1] = term
-            print("before action obs2", self.obs2)
+            ####print("before action obs2", self.obs2)
             # Check for illegal actions
             if self.status != Status.explore_space:
                 raise Exception
@@ -465,7 +483,7 @@ class PolyEnv(gym.Env):
 
                 reward = 0
 
-            print("dim: ",self.dim_ptr)
+            ####print("dim: ",self.dim_ptr)
             # Update ptrs for next step
             self.dim_ptr, self.term_ptr = self._get_incremented_ptrs(self.dim_ptr, self.term_ptr)
             done_explore = self.dim_ptr >= len(self.schedulePolys)
@@ -476,7 +494,10 @@ class PolyEnv(gym.Env):
                     info['isl_map'] = self._get_current_schedule_as_map()
                 reward, info['status'] = self._benchmark_current_schedule()
                 state_filtered = self._filter_state(state, with_repr)
-                return state_filtered, reward, True, info
+                self.nstate = self.obs2
+                state2['observation'] = self.obs2
+                #return state_filtered, reward, True, info
+                return state2, reward, True, info
             self._skip_vertices()
 
             # State
@@ -487,7 +508,7 @@ class PolyEnv(gym.Env):
                 state['current_coeff_vector'] = coeff_vectors[self.dim_ptr]
                 state['current_term_candidate_vector'] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
                 self.obs2[1] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
-                print("after action obs2", self.obs2)
+                ####print("after action obs2", self.obs2)
 
                 previous_deps_by_dim = self.schedulePolysDependences[:self.dim_ptr]
                 if len(previous_deps_by_dim) > 0:
@@ -514,9 +535,12 @@ class PolyEnv(gym.Env):
                 if (self.dim_ptr + 1) < len(self.schedulePolys):
                     #commentdep by s2136718 state['future_deps_by_dim'] = [[self.sample['dep_reps_by_deps'][dep] for dep in dim] for dim in self.schedulePolysDependences[self.dim_ptr+1:]]
                     state['future_deps_by_dim'] = [[dep for dep in dim] for dim in self.schedulePolysDependences[self.dim_ptr+1:]]
+
+                self.nstate = self.obs2
+                state2['observation'] = self.obs2
         
         # Update action mask
-        state['action_mask'] = np.concatenate([np.ones(3), np.zeros(3)]) if self.status == Status.construct_space \
+        state2['action_mask'] = np.concatenate([np.ones(3), np.zeros(3)]) if self.status == Status.construct_space \
             else np.concatenate([np.zeros(3), np.ones(3)])
 
         # Liself.dep_ptrmit actions
@@ -525,18 +549,19 @@ class PolyEnv(gym.Env):
         elif action == Action.select_dep:
             self.consecutive_next_dims = 0
         if self.consecutive_next_dims >= self.MAX_CONSECUTIVE_NEXT_DIMS:
-            state['action_mask'][Action.next_dim.value] = 0
+            state2['action_mask'][Action.next_dim.value] = 0
 
         # self.consecutive_next_dep_actions = self.consecutive_next_dep_actions + 1 if action == Action.next_dep else 0
         # if self.consecutive_next_dep_actions > self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS:
         #     state['action_mask'][Action.next_dep.value] = 0
 
-        if state['action_mask'][Action.select_dep.value] == 1 and len(self.availableDeps) > 0 and not self._can_dep_be_carried_strongly(self.availableDeps[self.dep_ptr]):
-            state['action_mask'][Action.select_dep.value] = 0
+        if state2['action_mask'][Action.select_dep.value] == 1 and len(self.availableDeps) > 0 and not self._can_dep_be_carried_strongly(self.availableDeps[self.dep_ptr]):
+            state2['action_mask'][Action.select_dep.value] = 0
 
         state_filtered = self._filter_state(state, with_repr)
 
-        return state_filtered, reward, False, info
+        #return state_filtered, reward, False, info
+        return state2, reward, False, info
 
     def _complete_construct_maybe(self):
         self._add_polyhedron()
@@ -633,4 +658,5 @@ class PolyEnv(gym.Env):
         return reward ** (1/float(REWARD_EXPONENT))
 
     def speedup_to_execution_time(self, speedup):
-        return self.sample['O3_execution_time'] / speedup
+        if speedup != 0:
+            return self.sample['O3_execution_time'] / speedup
