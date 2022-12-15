@@ -245,7 +245,7 @@ class PolyEnv(gym.Env):
             'observation': [None] * 4,
         }
 
-        # self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = len(self.sample['deps']) * 2 + 1
+        self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = len(self.sample['deps']) * 2 + 1
         self.MAX_CONSECUTIVE_NEXT_DIMS = 1
 
         #return self._filter_state(state, with_repr)
@@ -307,7 +307,6 @@ class PolyEnv(gym.Env):
         self.schedulePolys.append(polyhedron)
         self.schedulePolysDependences.append(self.stronglyCarried)
         self.schedulePolysDependenceMeta.append([(x.tupleNameIn, x.tupleNameOut) for x in carriedInCurrentDim])
-        print(self.schedulePolysDependenceMeta)
 
         if len(carriedInCurrentDim) == 0:
             self.consecutive_next_dims += 1
@@ -374,21 +373,22 @@ class PolyEnv(gym.Env):
                             else np.concatenate([np.zeros(3), np.ones(3)]),
         }
 
-
         # Construct
         if action in [Action.next_dim, Action.next_dep, Action.select_dep]:
+            #pudb.set_trace()
             self.obs[0] = self.dim_ptr
-            self.obs[1] = self.DepNum
+            self.obs[1] = self.dep_ptr
+            #self.obs[1] = self.DepNum
             self.obs[2] = self.strongDepForDim
             self.obs[3] = len(self.availableDeps)
-            print("state before action", self.obs)
-            print("action",action)
+            #print("state before action", self.obs)
             # Polyhedra construction
             if self.status != Status.construct_space:
                 raise Exception
 
             if action == Action.next_dim:
-                self._add_polyhedron()
+                #pudb.set_trace()
+                #self._add_polyhedron()
                 self.dim_ptr += 1
                 self.dep_ptr = 0
                 
@@ -419,10 +419,11 @@ class PolyEnv(gym.Env):
                     self.dep_ptr = 0
 
             self.obs[0] = self.dim_ptr
-            self.obs[1] = self.DepNum
+            self.obs[1] = self.dep_ptr
+            #self.obs[1] = self.DepNum
             self.obs[2] = self.strongDepForDim
             self.obs[3] = len(self.availableDeps)
-            print("state after action", self.obs)
+            #print("state after action", self.obs)
             self.nstate = self.obs
             state2['observation'] = self.obs
 
@@ -449,7 +450,8 @@ class PolyEnv(gym.Env):
             #print("action")
             ####print("action: ",action)
             term, term_type = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)
-            self.obs2[1] = term
+            self.obs2[0] = self.dim_ptr
+            self.obs2[1] = tuple(term)
             ####print("before action obs2", self.obs2)
             # Check for illegal actions
             if self.status != Status.explore_space:
@@ -483,7 +485,7 @@ class PolyEnv(gym.Env):
 
                 reward = 0
 
-            ####print("dim: ",self.dim_ptr)
+            #print("coeff and summand:", self.coeffs_and_summands_by_dim[self.dim_ptr])
             # Update ptrs for next step
             self.dim_ptr, self.term_ptr = self._get_incremented_ptrs(self.dim_ptr, self.term_ptr)
             done_explore = self.dim_ptr >= len(self.schedulePolys)
@@ -504,10 +506,10 @@ class PolyEnv(gym.Env):
             if with_repr:
                 coeff_vectors = [self._summands_to_coeff_vector([summand for _, summand in coeffs_and_summands]) for
                                  coeffs_and_summands in self.coeffs_and_summands_by_dim]
-                self.obs2[0] = coeff_vectors[self.dim_ptr]
+                #self.obs2[0] = coeff_vectors[self.dim_ptr]
                 state['current_coeff_vector'] = coeff_vectors[self.dim_ptr]
                 state['current_term_candidate_vector'] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
-                self.obs2[1] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
+                #self.obs2[1] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
                 ####print("after action obs2", self.obs2)
 
                 previous_deps_by_dim = self.schedulePolysDependences[:self.dim_ptr]
@@ -519,13 +521,14 @@ class PolyEnv(gym.Env):
                 if len(previous_coeff_vectors) > 0:
                     state['previous_coeff_vectors'] = previous_coeff_vectors
 
-                next_terms = []
-                for generator in self.schedulePolys:
-                    for line in generator.lines:
-                        next_terms.append(line)
-                    for ray in generator.rays:
-                        next_terms.append(ray)
-                state['next_terms'] = next_terms
+                #next_terms commented by s2136718
+                #next_terms = []
+                #for generator in self.schedulePolys:
+                #    for line in generator.lines:
+                #        next_terms.append(line)
+                #    for ray in generator.rays:
+                #        next_terms.append(ray)
+                #state['next_terms'] = next_terms
 
                 current_dim_deps = [dep for dep in self.schedulePolysDependences[self.dim_ptr]]
                 #commentdep by s2136718 current_dim_deps = [self.sample['dep_reps_by_deps'][dep] for dep in self.schedulePolysDependences[self.dim_ptr]]
@@ -551,9 +554,10 @@ class PolyEnv(gym.Env):
         if self.consecutive_next_dims >= self.MAX_CONSECUTIVE_NEXT_DIMS:
             state2['action_mask'][Action.next_dim.value] = 0
 
-        # self.consecutive_next_dep_actions = self.consecutive_next_dep_actions + 1 if action == Action.next_dep else 0
-        # if self.consecutive_next_dep_actions > self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS:
-        #     state['action_mask'][Action.next_dep.value] = 0
+        self.consecutive_next_dep_actions = self.consecutive_next_dep_actions + 1 if action == Action.next_dep else 0
+        
+        if self.consecutive_next_dep_actions > self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS:
+            state2['action_mask'][Action.next_dep.value] = 0
 
         if state2['action_mask'][Action.select_dep.value] == 1 and len(self.availableDeps) > 0 and not self._can_dep_be_carried_strongly(self.availableDeps[self.dep_ptr]):
             state2['action_mask'][Action.select_dep.value] = 0

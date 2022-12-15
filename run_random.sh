@@ -6,7 +6,7 @@ mkdir /tmp/procs_out
 
 POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs  python train_random.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 1 -with_polyenv_sampling_bias bias_select_dep >> /tmp/procs_out/poly_select_dep.out 2>&1 &
 
-#POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs  python -m pudb train_random.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 3 -with_polyenv_sampling_bias bias_select_dep
+#POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs  python -m pudb train_random.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 1 -with_polyenv_sampling_bias bias_select_dep
 
 #wait
 

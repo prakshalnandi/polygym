@@ -20,7 +20,8 @@ import copy
 from buffer import Buffer
 from agents import QLearningAgent
 
-#import pudb
+import pudb
+from environment import Status
 
 flags.DEFINE_string('out_dir', '', 'Root dir to store the results.')
 flags.DEFINE_boolean('with_baselines', False, 'Benchmark baselines.')
@@ -54,7 +55,7 @@ def append_to_csv(filename, row):
         writer.writerow(row)
 
 
-def gen_and_bench_random_schedule(env, sample_name, agent,  sampling_bias=None, predef_actions=None, blnTraining=True):
+def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_bias=None, predef_actions=None, blnTraining=True):
     with_ast_and_map = True if sample_name in ['gemm', 'matvect'] else False
     state = env.reset(sample_name, with_repr = True, with_ast_and_map=with_ast_and_map)
 
@@ -62,8 +63,11 @@ def gen_and_bench_random_schedule(env, sample_name, agent,  sampling_bias=None, 
     done = False
     reward = None
 
+    isExplore = False
+
     exec_time = None
     memory = Buffer(int(1e4))
+    memory_ex = Buffer(int(1e4))
     #agent = QLearningAgent(
     #    action_space=env.action_space,
     #    obs_space=state,
@@ -94,35 +98,52 @@ def gen_and_bench_random_schedule(env, sample_name, agent,  sampling_bias=None, 
                 action_idx = np.random.choice(np.nonzero(state['action_mask'])[0])
             #action = list(environment.Action)[action_idx]
             #actions.append(action_idx)
-            
-            if action_idx < 2:
+            #print("status", env.status)
+            #print("action_index: ", action_idx)
+            #if action_idx < 2:
+            #pudb.set_trace()
+            if env.status == Status.construct_space:
 
                 actList = [index for index,value in enumerate(mask) if value == 1]
+                #print("mask", mask)
+                #print("actList", actList)
                 action_idx = agent.choose_action(tuple(np.array(state['observation'])), actList, blnTraining)
-                print("act_num")
-                print(action_idx)
+                #print("agent_act_const", action_idx)
+
+            else:
+                if(isExplore == False):
+                    state['observation'] = [None] * 2
+                    isExplore = True
+                actList = [index for index,value in enumerate(mask) if value == 1]
+                #print("mask", mask)
+                #print("actList", actList)
+                action_idx = agent_ex.choose_action(tuple(np.array(state['observation'])), actList, blnTraining)
+                #print("agent_act_explore:", action_idx)
             
             action = list(environment.Action)[action_idx]
             actions.append(action_idx)      
             #prev_obs = state['observation']
             nstate, reward, done, info = env.step(action, True)
-            if action_idx in [0,1,2]:
+            #print("status after action : ", env.status)
+            if env.status == Status.construct_space:
+            #if action_idx in [0,1,2]:
                 memory.add(np.array(state['observation']),
                     np.array([action_idx]),
                     np.array(nstate['observation']),
                     np.array([done]),
-                )   
-
+                )
+            else:
+                #print("explore state: ",  nstate['observation'])
+                if isExplore:
+                    memory_ex.add(np.array(state['observation']),
+                        np.array([action_idx]),
+                        np.array(nstate['observation']),
+                        np.array([done]),
+                    )      
                 #state = copy.deepcopy(nstate)
             state = copy.deepcopy(nstate)
             #state = dict((k,v) for (k,v) in nstate.items())
 
-        #print(replay_buffer.memory)
-        #print("example")
-        #print(replay_buffer.memory[0][1][0]['observation'])
-        #print(replay_buffer.memory[0][9][0]['observation'])
-        #print(replay_buffer.memory[0][15][0]['observation'])
-        
         #print("previous Q Table")
         #print(agent.q_table)
         #for io in range(replay_buffer.writes):
@@ -158,7 +179,7 @@ def gen_and_bench_random_schedule(env, sample_name, agent,  sampling_bias=None, 
             schedule_eval.OutputValidationException) as e:
         status = e.__class__.__name__
 
-    return reward, status, actions, ast if 'ast' in locals() else None, isl_map if 'isl_map' in locals() else None, memory 
+    return reward, status, actions, ast if 'ast' in locals() else None, isl_map if 'isl_map' in locals() else None, memory, memory_ex 
 
 
 def bench(invocation, optimization=None, clang_exe=None, additional_params=None):
@@ -269,6 +290,13 @@ def main(argv):
                     epsilon=PARAMETERS["epsilon"],
                     )
 
+        agent_ex = QLearningAgent(
+                    action_space=env.action_space,
+                    gamma=PARAMETERS["gamma"],
+                    alpha=PARAMETERS["alpha"],
+                    epsilon=PARAMETERS["epsilon"],
+                    )
+
         #i = 0
         #while True:
         for i in range(FLAGS.stop_at):
@@ -293,13 +321,14 @@ def main(argv):
                 #    alpha=PARAMETERS["alpha"],
                 #    epsilon=PARAMETERS["epsilon"],
                 #    )
-                if (i == FLAGS.stop_at - 2 or i == FLAGS.stop_at - 1):
+                if (i > FLAGS.stop_at - 4): 
+                #if (i > FLAGS.stop_at):
                     #pudb.set_trace()
                     print("Testing")
-                    reward, status, actions, ast, isl_map, memory = gen_and_bench_random_schedule(env, sample_name, agent, FLAGS.with_polyenv_sampling_bias, blnTraining=False)
+                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  FLAGS.with_polyenv_sampling_bias, blnTraining=False)
                 else:
                     # Bench
-                    reward, status, actions, ast, isl_map, memory = gen_and_bench_random_schedule(env, sample_name, agent, FLAGS.with_polyenv_sampling_bias)
+                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  FLAGS.with_polyenv_sampling_bias)
 
                 speedup = env.reward_to_speedup(reward)
                 print('speedup :' + str(speedup))
@@ -326,7 +355,15 @@ def main(argv):
                 #print("Updated Q table")
                 #print(agent.q_table)
 
-                # Save result
+                for io2 in range(memory_ex.entries):
+                    if (memory_ex.records.actions[io2][0] in [3,4,5]):
+                        agent_ex.update_q_table(tuple(memory_ex.records.states[io2]),
+                                memory_ex.records.actions[io2][0],
+                                reward,
+                                tuple(memory_ex.records.next_states[io2]),
+                                memory_ex.records.done[io2][0])
+
+                #i Save result
                 create_csv_if_not_exists(csv_filename, ['method', 'execution_time', 'status', 'actions', 'ast', 'isl_map'])
                 append_to_csv(csv_filename, ['PolyEnv-random', exec_time, status, str(actions), str(ast), str(isl_map)])
 

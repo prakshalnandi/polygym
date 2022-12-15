@@ -30,15 +30,23 @@ class Agent(ABC):
 
         ##find action with max value
         act_vals = [self.q_table[(obs, act)] for act in lstActs]
+        #print("act_vals while choosing actions", act_vals)
+        #print("choice act_vals: ", act_vals)
         max_val = max(act_vals)
-        max_acts = [idx for idx, act_val in enumerate(act_vals) if act_val == max_val]
-        
+        #print("max_val: ", max_val)
+        max_acts = [lstActs[idx] for idx, act_val in enumerate(act_vals) if act_val == max_val]
+        #print("max_acts: ", max_acts)
+
         if(blnTraining == False):
             #pudb.set_trace()
-            print("Testing -> Agent")
-        if random.random() < self.epsilon and blnTraining==True:
+            self.epsilon = 1
+        else:
+            self.epsilon = 0.5
+        if random.random() >= self.epsilon and blnTraining==True:
+            #print("in random: ", lstActs)
             return random.choice(lstActs)
         else:
+            #print("in max_axts: ", max_acts)
             return random.choice(max_acts)
         return -1
 
