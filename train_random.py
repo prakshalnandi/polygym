@@ -16,6 +16,8 @@ import polygym
 import schedule_eval
 
 import copy
+import pickle 
+import time
 
 from buffer import Buffer
 from agents import QLearningAgent
@@ -117,6 +119,7 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_b
                 actList = [index for index,value in enumerate(mask) if value == 1]
                 #print("mask", mask)
                 #print("actList", actList)
+                #print("state_added: ", tuple(np.array(state['observation'])))
                 action_idx = agent_ex.choose_action(tuple(np.array(state['observation'])), actList, blnTraining)
                 #print("agent_act_explore:", action_idx)
             
@@ -127,6 +130,7 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_b
             #print("status after action : ", env.status)
             if env.status == Status.construct_space:
             #if action_idx in [0,1,2]:
+                #print("adding state to memory: ", np.array(state['observation']))
                 memory.add(np.array(state['observation']),
                     np.array([action_idx]),
                     np.array(nstate['observation']),
@@ -141,7 +145,8 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_b
                         np.array([done]),
                     )      
                 #state = copy.deepcopy(nstate)
-            state = copy.deepcopy(nstate)
+            #state = copy.deepcopy(nstate)
+            state = pickle.loads(pickle.dumps(nstate))
             #state = dict((k,v) for (k,v) in nstate.items())
 
         #print("previous Q Table")
@@ -206,6 +211,7 @@ def bench(invocation, optimization=None, clang_exe=None, additional_params=None)
 
 
 def main(argv):
+    start = time.time()
     if FLAGS.with_baselines:
         clang_exes = [
                 None,
@@ -380,6 +386,9 @@ def main(argv):
         print('isl_map: ' + isl_map)
         print('ast: '+ ast)
         print('exec_time: '+ exec_time)
+
+    end = time.time()
+    print("Time taken to run the script: ", end - start)
 
 if __name__ == "__main__":
     app.run(main)

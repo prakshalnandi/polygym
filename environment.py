@@ -192,6 +192,7 @@ class PolyEnv(gym.Env):
         self.obs = [None] * 4
         self.strongDepForDim = 0
         self.DepNum = 0
+        self.Deps = []
         
         self.obs2 = [[None],[None]]
 
@@ -379,7 +380,8 @@ class PolyEnv(gym.Env):
             self.obs[0] = self.dim_ptr
             self.obs[1] = self.dep_ptr
             #self.obs[1] = self.DepNum
-            self.obs[2] = self.strongDepForDim
+            #self.obs[2] = self.strongDepForDim
+            self.obs[2] = self.Deps
             self.obs[3] = len(self.availableDeps)
             #print("state before action", self.obs)
             # Polyhedra construction
@@ -393,6 +395,7 @@ class PolyEnv(gym.Env):
                 self.dep_ptr = 0
                 
                 self.strongDepForDim = 0
+                self.Deps = []
 
                 self._complete_construct_maybe()
 
@@ -410,6 +413,7 @@ class PolyEnv(gym.Env):
                 del self.availableDeps[self.dep_ptr]
 
                 self.DepNum += 1
+                self.Deps.append(dep)
                 
 
                 if len(self.availableDeps) == 0:
@@ -421,7 +425,10 @@ class PolyEnv(gym.Env):
             self.obs[0] = self.dim_ptr
             self.obs[1] = self.dep_ptr
             #self.obs[1] = self.DepNum
-            self.obs[2] = self.strongDepForDim
+            #self.obs[2] = self.strongDepForDim
+            #self.obs[2] = tuple(self.Deps)
+            self.obs[2] = tuple([(x.tupleNameIn, x.tupleNameOut) for x in self.Deps])
+            #print("obs[2]: ", self.obs[2])
             self.obs[3] = len(self.availableDeps)
             #print("state after action", self.obs)
             self.nstate = self.obs
