@@ -7,11 +7,19 @@ mkdir /tmp/procs_out
 
 #starttime = time.time()
 
-POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs  python train_random.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 15 -with_polyenv_sampling_bias bias_select_dep >> /tmp/procs_out/poly_select_dep.out 2>&1 &
+### Basic RL
+#POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs  python train_random.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 1 -with_polyenv_sampling_bias bias_select_dep >> /tmp/procs_out/poly_select_dep.out 2>&1 &
 
+### Deep RL
+POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs  python train_dl.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 1 -with_polyenv_sampling_bias bias_select_dep >> /tmp/procs_out/poly_select_dep.out 2>&1 &
+
+### Deep RL with scalene profiling
+#POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs  python -m scalene train_dl.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 1 -with_polyenv_sampling_bias bias_select_dep >> /tmp/procs_out/poly_select_dep.out 2>&1 &
 #endtime = time.time()
 
 #print("time taken: ", endtime - starttime)
+
+### Basic RL with debug pudb
 #POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs  python -m pudb train_random.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 1 -with_polyenv_sampling_bias bias_select_dep
 
 #wait

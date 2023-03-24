@@ -88,7 +88,7 @@ class PolyEnv(gym.Env):
         if sample_name not in self.samples:
             # Get invocation
             sys.argv = self.invocations[sample_name]
-
+            #pudb.set_trace()
             # Construct sample
             # - Polyhedral SCoP description
             _, compilation_params, config, scop_file, jsonp, scop = polygym.parse_args()
@@ -97,6 +97,7 @@ class PolyEnv(gym.Env):
                                                         scop.reads().gist_domain(scop.domain),
                                                         scop.writes().gist_domain(scop.domain))
 
+            #pudb.set_trace()
             # - Representations
 #            dep_reps_by_deps = {dep: representation.construct_dependency_graph(compilation_params,
 #                                                                               scop_file,
@@ -189,13 +190,14 @@ class PolyEnv(gym.Env):
         self.num_steps = 0
         self.last_reward = 0
 
-        self.obs = [None] * 4
+        ##self.obs = [None] * 4
+        self.obs = [-1] * 4
         self.strongDepForDim = 0
         self.DepNum = 0
         self.Deps = []
         
-        self.obs2 = [[None],[None]]
-
+        #self.obs2 = [[None],[None]]
+        self.obs2 = [[-1],[-1]]
         self.nstate = None
 
         self._carry_uncarried_deps_weakly()
@@ -243,7 +245,8 @@ class PolyEnv(gym.Env):
         state2 = {
             'action_mask': np.concatenate([np.ones(3), np.zeros(3)]) if self.status == Status.construct_space \
                 else np.concatenate([np.zeros(3), np.ones(3)]),
-            'observation': [None] * 4,
+            #'observation': [None] * 4,
+            'observation': [-1] * 4,
         }
 
         self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = len(self.sample['deps']) * 2 + 1
@@ -425,9 +428,9 @@ class PolyEnv(gym.Env):
             self.obs[0] = self.dim_ptr
             self.obs[1] = self.dep_ptr
             #self.obs[1] = self.DepNum
-            #self.obs[2] = self.strongDepForDim
+            self.obs[2] = self.strongDepForDim
             #self.obs[2] = tuple(self.Deps)
-            self.obs[2] = tuple([(x.tupleNameIn, x.tupleNameOut) for x in self.Deps])
+            ##self.obs[2] = tuple([(x.tupleNameIn, x.tupleNameOut) for x in self.Deps])
             #print("obs[2]: ", self.obs[2])
             self.obs[3] = len(self.availableDeps)
             #print("state after action", self.obs)
@@ -517,7 +520,7 @@ class PolyEnv(gym.Env):
                 state['current_coeff_vector'] = coeff_vectors[self.dim_ptr]
                 state['current_term_candidate_vector'] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
                 #self.obs2[1] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
-                ####print("after action obs2", self.obs2)
+                #print("after action obs2", self.obs2)
 
                 previous_deps_by_dim = self.schedulePolysDependences[:self.dim_ptr]
                 if len(previous_deps_by_dim) > 0:
