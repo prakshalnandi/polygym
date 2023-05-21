@@ -35,6 +35,9 @@ flags.DEFINE_integer('stop_at', None, 'Number of OK samples to stop at.')
 
 flags.DEFINE_string('with_action_import_sample_name', '', 'The sample name of the action sequence to import.')
 flags.DEFINE_string('with_action_import_actions', '', 'The action sequence to import.')
+
+flags.DEFINE_string('dep_rep', '', 'The type of state representation.') #simple #complex_coeff
+
 FLAGS = flags.FLAGS
 
 PARAMETERS = {
@@ -57,9 +60,9 @@ def append_to_csv(filename, row):
         writer.writerow(row)
 
 
-def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_bias=None, predef_actions=None, blnTraining=True):
+def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_bias=None, predef_actions=None, blnTraining=True, iDep_rep='simple'):
     with_ast_and_map = True if sample_name in ['gemm', 'matvect'] else False
-    state = env.reset(sample_name, with_repr = True, with_ast_and_map=with_ast_and_map)
+    state = env.reset(sample_name, with_repr = True, with_ast_and_map=with_ast_and_map, dep_rep=iDep_rep)
 
     actions = []
     done = False
@@ -109,7 +112,7 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_b
                 actList = [index for index,value in enumerate(mask) if value == 1]
                 #print("mask", mask)
                 #print("actList", actList)
-                action_idx = agent.choose_action(tuple(np.array(state['observation'])), actList, blnTraining)
+                action_idx = agent.choose_action(tuple(np.array(state['observation'],dtype=object)), actList, blnTraining)
                 #print("agent_act_const", action_idx)
 
             else:
@@ -118,56 +121,37 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_b
                     isExplore = True
                 actList = [index for index,value in enumerate(mask) if value == 1]
                 #print("mask", mask)
-                #print("actList", actList)
-                #print("state_added: ", tuple(np.array(state['observation'])))
-                action_idx = agent_ex.choose_action(tuple(np.array(state['observation'])), actList, blnTraining)
+                #print("actList", actList
+                action_idx = agent_ex.choose_action(tuple(np.array(state['observation'],dtype=object)), actList, blnTraining)
                 #print("agent_act_explore:", action_idx)
             
             action = list(environment.Action)[action_idx]
             actions.append(action_idx)      
             #prev_obs = state['observation']
-            nstate, reward, done, info = env.step(action, True)
+            nstate, reward, done, info = env.step(action, True, dep_rep=iDep_rep)
             #print("status after action : ", env.status)
-            if env.status == Status.construct_space:
-            #if action_idx in [0,1,2]:
-                #print("adding state to memory: ", np.array(state['observation']))
-                memory.add(np.array(state['observation']),
-                    np.array([action_idx]),
-                    np.array(nstate['observation']),
-                    np.array([done]),
-                )
-            else:
-                #print("explore state: ",  nstate['observation'])
-                if isExplore:
-                    memory_ex.add(np.array(state['observation']),
+            if blnTraining:
+                if env.status == Status.construct_space:
+                #if action_idx in [0,1,2]:
+                    #print("adding state to memory: ", np.array(state['observation']))
+                    memory.add(np.array(state['observation'],dtype=object),
                         np.array([action_idx]),
-                        np.array(nstate['observation']),
+                        np.array(nstate['observation'],dtype=object),
                         np.array([done]),
-                    )      
+                        )   
+                else:
+                    #print("explore state: ",  nstate['observation'])
+                    if isExplore:
+                        memory_ex.add(np.array(state['observation'],dtype=object),
+                            np.array([action_idx]),
+                            np.array(nstate['observation'],dtype=object),
+                            np.array([done]),
+                        )         
                 #state = copy.deepcopy(nstate)
             #state = copy.deepcopy(nstate)
             state = pickle.loads(pickle.dumps(nstate))
             #state = dict((k,v) for (k,v) in nstate.items())
 
-        #print("previous Q Table")
-        #print(agent.q_table)
-        #for io in range(replay_buffer.writes):
-        #    print("states")
-        #    print(replay_buffer.memory.states[io])
-        #    print("actions")
-        #    print(replay_buffer.memory.actions[io])
-        #    print("next_states")
-        #    print(replay_buffer.memory.next_states[io])
-        #    print("done")
-        #    print(replay_buffer.memory.done[io])
-        #    if (replay_buffer.memory.actions[io][0] in [0,1,2]): 
-        #        agent.learn(tuple(replay_buffer.memory.states[io]),
-        #                replay_buffer.memory.actions[io][0], 
-        #                reward, 
-        #                tuple(replay_buffer.memory.next_states[io]), 
-        #                replay_buffer.memory.done[io][0])
-        #print("Updated Q table")
-        #print(agent.q_table)
 
         #speedup = env.reward_to_speedup(reward)
         #print('speedup :' + str(speedup))
@@ -286,7 +270,7 @@ def main(argv):
     if FLAGS.with_polyenv:
         env_config = {'invocations': polygym.polybench_invocations}
         env = environment.PolyEnv(env_config)
-
+        blnTesting = False
         to_process = list(polygym.polybench_invocations.keys())
 
         agent = QLearningAgent(
@@ -303,6 +287,7 @@ def main(argv):
                     epsilon=PARAMETERS["epsilon"],
                     )
 
+        print("Initializing Agents")
         #i = 0
         #while True:
         for i in range(FLAGS.stop_at):
@@ -327,17 +312,24 @@ def main(argv):
                 #    alpha=PARAMETERS["alpha"],
                 #    epsilon=PARAMETERS["epsilon"],
                 #    )
-                if (i > FLAGS.stop_at - 4): 
-                #if (i > FLAGS.stop_at):
+                ##if (i > FLAGS.stop_at - 4):
+                #if (sample_name == 'mvt'):
+                if (i > FLAGS.stop_at - 4):
                     #pudb.set_trace()
                     print("Testing")
-                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  FLAGS.with_polyenv_sampling_bias, blnTraining=False)
+                    blnTesting = True
+                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  FLAGS.with_polyenv_sampling_bias, blnTraining=False, iDep_rep=FLAGS.dep_rep)
                 else:
                     # Bench
-                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  FLAGS.with_polyenv_sampling_bias)
+                    blnTesting = False
+                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  FLAGS.with_polyenv_sampling_bias, iDep_rep=FLAGS.dep_rep)
 
                 speedup = env.reward_to_speedup(reward)
-                print('speedup :' + str(speedup))
+                #print('speedup :' + str(speedup))
+                if blnTesting:
+                    print('testing speedup :' + str(speedup), " for sample name: ", sample_name)
+                else:
+                    print('speedup :' + str(speedup), " for sample name: ", sample_name)
                 exec_time = env.speedup_to_execution_time(speedup)
                 print('exectime :' + str(exec_time))
 
@@ -352,7 +344,7 @@ def main(argv):
                     #print(replay_buffer.memory.next_states[io])
                     #print("done")
                     #print(replay_buffer.memory.done[io])
-                    if (memory.records.actions[io][0] in [0,1,2]):
+                    if (memory.records.actions[io][0] in [0,1,2]) and (blnTesting == False):
                         agent.update_q_table(tuple(memory.records.states[io]),
                                 memory.records.actions[io][0],
                                 reward,
@@ -362,7 +354,7 @@ def main(argv):
                 #print(agent.q_table)
 
                 for io2 in range(memory_ex.entries):
-                    if (memory_ex.records.actions[io2][0] in [3,4,5]):
+                    if (memory_ex.records.actions[io2][0] in [3,4,5])and (blnTesting == False):
                         agent_ex.update_q_table(tuple(memory_ex.records.states[io2]),
                                 memory_ex.records.actions[io2][0],
                                 reward,

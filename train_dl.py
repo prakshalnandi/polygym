@@ -37,12 +37,15 @@ flags.DEFINE_integer('stop_at', None, 'Number of OK samples to stop at.')
 
 flags.DEFINE_string('with_action_import_sample_name', '', 'The sample name of the action sequence to import.')
 flags.DEFINE_string('with_action_import_actions', '', 'The action sequence to import.')
+
+flags.DEFINE_string('dep_rep', '', 'The type of state representation.') #simple #complex_coeff
+
 FLAGS = flags.FLAGS
 
 PARAMETERS = {
-    "gamma": 0.99,
+    "gamma": 0.95,
     "alpha": 0.1,
-    "epsilon": 0.9,
+    "epsilon": 0.55555,
 }
 
 CONFIG= {
@@ -53,7 +56,7 @@ CONFIG= {
     "eval_freq": 1000, # HOW OFTEN WE EVALUATE (AND RENDER IF RENDER=TRUE)
     "eval_episodes": 5,
     "learning_rate": 1e-4,
-    "hidden_size": (128,64),
+    "hidden_size": (512,256),
     "target_update_freq": 500,
     "batch_size": 32,
     "gamma": 0.99,
@@ -77,9 +80,9 @@ def append_to_csv(filename, row):
 
 
 ###@profile
-def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex, deep_agent,  sampling_bias=None, predef_actions=None, blnTraining=True):
+def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex, deep_agent,  sampling_bias=None, predef_actions=None, blnTraining=True, iDep_rep='simple'):
     with_ast_and_map = True if sample_name in ['gemm', 'matvect'] else False
-    state = env.reset(sample_name, with_repr = True, with_ast_and_map=with_ast_and_map)
+    state = env.reset(sample_name, with_repr = True, with_ast_and_map=with_ast_and_map, dep_rep=iDep_rep)
 
     actions = []
     done = False
@@ -116,7 +119,7 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex, deep_agent,
                 actList = [index for index,value in enumerate(mask) if value == 1]
                 #print("actList: ", actList)
                 action_idx = agent.choose_action(tuple(np.array(state['observation'])), actList, blnTraining)
-                deep_act = deep_agent.act(np.array(state['observation']), actList, blnTraining)
+                deep_act = deep_agent.act(np.array(state['observation'], dtype=np.int32), actList, blnTraining)
                 #print("deep_act: ", deep_act)
                 #print("action taken: ", action_idx)
                 action_idx = deep_act
@@ -126,34 +129,28 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex, deep_agent,
                     state['observation'] = [None] * 2
                     isExplore = True
                 actList = [index for index,value in enumerate(mask) if value == 1]
-                action_idx = agent_ex.choose_action(tuple(np.array(state['observation'])), actList, blnTraining)
+                action_idx = agent_ex.choose_action(tuple(np.array(state['observation'],dtype=object)), actList, blnTraining)
                 #deep_act = deep_agent.act(np.array(state['observation']), actList, blnTraining)
             
             action = list(environment.Action)[action_idx]
             actions.append(action_idx)      
             #prev_obs = state['observation']
-            nstate, reward, done, info = env.step(action, True)
-            #print("status after action : ", env.status)
-            #print("state: ", state['observation'])
-            #print("state np array: ",np.array(state['observation']))
-            #print("state np array ",  np.array(state['observation'], dtype=np.int32))
-            #print("array type: ",  np.array(state['observation'], dtype=np.int32).dtype)
-            #print("torch tensor: ",   torch.tensor(np.array(state['observation']), dtype=torch.int32))
-            #print("torch tensor type: ",   torch.tensor(np.array(state['observation']), dtype=torch.int32).dtype)
+            nstate, reward, done, info = env.step(action, True, dep_rep=iDep_rep)
+            
             if env.status == Status.construct_space:
             #if action_idx in [0,1,2]:
                 #print("adding state to memory: ", np.array(state['observation']))
-                memory.add(np.array(state['observation']),
+                memory.add(np.array(state['observation'], dtype=np.int32),
                     np.array([action_idx]),
-                    np.array(nstate['observation']),
+                    np.array(nstate['observation'], dtype=np.int32),
                     np.array([done]),
                 )
             else:
                 #print("explore state: ",  nstate['observation'])
                 if isExplore:
-                    memory_ex.add(np.array(state['observation']),
+                    memory_ex.add(np.array(state['observation'],dtype=object),
                         np.array([action_idx]),
-                        np.array(nstate['observation']),
+                        np.array(nstate['observation'],dtype=object),
                         np.array([done]),
                     )      
                 #state = copy.deepcopy(nstate)
@@ -282,6 +279,19 @@ def main(argv):
 
         to_process = list(polygym.polybench_invocations.keys())
 
+        blnTesting = False
+
+        print("initializing agent")
+
+        intParam = 4
+        if(FLAGS.dep_rep == 'complex_coeff'):
+            intParam = 211
+        elif (FLAGS.dep_rep == 'complex_full'):
+            intParam = 291
+        else:
+            intParam = 4 
+
+
         agent = QLearningAgent(
                     action_space=env.action_space,
                     gamma=PARAMETERS["gamma"],
@@ -299,11 +309,14 @@ def main(argv):
         deep_agent = DQN(
                     action_space=np.concatenate([np.ones(3), np.zeros(3)]), observation_space=np.array([None] * 4), **CONFIG
                     )
-        """
+        
         deep_agent = DQN(
                     action_space=np.ones(3), observation_space=np.array([None] * 4), **CONFIG
                     )
-
+        """
+        deep_agent = DQN(
+                    action_space=np.ones(3), observation_space=np.full((intParam),-1), **CONFIG
+                    )
         #i = 0
         #while True:
         for i in range(FLAGS.stop_at):
@@ -311,6 +324,9 @@ def main(argv):
             print('len(to_process): ' + str(len(to_process)))
 
             for sample_name in tqdm.tqdm(to_process):
+
+                if (i > FLAGS.stop_at - 2):
+                    sample_name = 'mvt'
                 csv_filename = os.path.join(FLAGS.out_dir, sample_name + '.csv')
 
                 # Remove sample from eval if its evaluated enough already
@@ -328,42 +344,51 @@ def main(argv):
                 #    alpha=PARAMETERS["alpha"],
                 #    epsilon=PARAMETERS["epsilon"],
                 #    )
-                if (i > FLAGS.stop_at - 4): 
-                #if (i > FLAGS.stop_at):
+                #if (sample_name == 'mvt'):
+                if (i > FLAGS.stop_at - 4):
+                    #if (i > FLAGS.stop_at):
                     #pudb.set_trace()
+                    
+                    blnTesting = True
                     print("Testing")
-                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex, deep_agent, FLAGS.with_polyenv_sampling_bias, blnTraining=False)
+                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex, deep_agent, FLAGS.with_polyenv_sampling_bias, blnTraining=False, iDep_rep=FLAGS.dep_rep)
                 else:
                     # Bench
-                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex, deep_agent, FLAGS.with_polyenv_sampling_bias)
+                    blnTesting = False
+                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex, deep_agent, FLAGS.with_polyenv_sampling_bias, iDep_rep=FLAGS.dep_rep)
 
                 speedup = env.reward_to_speedup(reward)
-                print('speedup :' + str(speedup))
+                #print('speedup :' + str(speedup))
+                if blnTesting:
+                    print('Testing speedup :' + str(speedup))
+                else:
+                    print('speedup :' + str(speedup))
                 exec_time = env.speedup_to_execution_time(speedup)
                 print('exectime :' + str(exec_time))
 
                 #print("previous Q Table")
                 #print(agent.q_table)
-                for io in range(memory.entries):
-                    if (memory.records.actions[io][0] in [0,1,2]):
-                        agent.update_q_table(tuple(memory.records.states[io]),
-                                memory.records.actions[io][0],
-                                reward,
-                                tuple(memory.records.next_states[io]),
-                                memory.records.done[io][0])
-                #print("Updated Q table")
-                #print(agent.q_table)
+                if(blnTesting == False):
+                    for io in range(memory.entries):
+                        if (memory.records.actions[io][0] in [0,1,2]):
+                            agent.update_q_table(tuple(memory.records.states[io]),
+                                    memory.records.actions[io][0],
+                                    reward,
+                                    tuple(memory.records.next_states[io]),
+                                    memory.records.done[io][0])
+                    #print("Updated Q table")
+                    #print(agent.q_table)
 
-                for io2 in range(memory_ex.entries):
-                    if (memory_ex.records.actions[io2][0] in [3,4,5]):
-                        agent_ex.update_q_table(tuple(memory_ex.records.states[io2]),
-                                memory_ex.records.actions[io2][0],
-                                reward,
-                                tuple(memory_ex.records.next_states[io2]),
-                                memory_ex.records.done[io2][0])
+                    for io2 in range(memory_ex.entries):
+                        if (memory_ex.records.actions[io2][0] in [3,4,5]):
+                            agent_ex.update_q_table(tuple(memory_ex.records.states[io2]),
+                                    memory_ex.records.actions[io2][0],
+                                    reward,
+                                    tuple(memory_ex.records.next_states[io2]),
+                                    memory_ex.records.done[io2][0])
 
-                loss = deep_agent.update(memory.records, reward)["q_loss"]
-                print("loss: ", loss)
+                    loss = deep_agent.update(memory.records, reward)["q_loss"]
+                    print("loss: ", loss)
                 #i Save result
                 create_csv_if_not_exists(csv_filename, ['method', 'execution_time', 'status', 'actions', 'ast', 'isl_map'])
                 append_to_csv(csv_filename, ['PolyEnv-random', exec_time, status, str(actions), str(ast), str(isl_map)])

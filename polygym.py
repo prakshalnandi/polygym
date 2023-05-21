@@ -16,7 +16,6 @@ from math import gcd
  
 import schedule_eval
 
-
 CHERNIKOVA_TIMEOUT = 60
 
 
@@ -28,7 +27,7 @@ def get_env_or_default(vairable_name, default_name):
 polyite_dir = get_env_or_default('POLYITEDIR', '/home/s2136718/MLPC')
 
 polybench_invocations = {
-    #'matvect' : ['', '--include_dirs', polyite_dir + '/polybench-c-4.1/utilities ' + polyite_dir + '/polybench-c-4.1/linear-algebra/kernels/matvect', '--source_files', polyite_dir + '/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polybench-c-4.1/linear-algebra/kernels/matvect/matvect.c', '--function_name', 'kernel_matvect', '--num_iterations', '500'],
+    ###'matvect' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/kernels/matvect', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/kernels/matvect/matvect.c', '--function_name', 'kernel_matvect', '--num_iterations', '500'],
 
     #'gemm' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/blas/gemm', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/blas/gemm/gemm.c', '--function_name', 'kernel_gemm', '--num_iterations', '500'],
     #'2mm' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/kernels/2mm', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/kernels/2mm/2mm.c', '--function_name', 'kernel_2mm', '--num_iterations', '500'],
@@ -41,9 +40,9 @@ polybench_invocations = {
     #'trmm' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/blas/trmm', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/blas/trmm/trmm.c', '--function_name', 'kernel_trmm', '--num_iterations', '500'],
     #'atax' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/kernels/atax', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/kernels/atax/atax.c', '--function_name', 'kernel_atax', '--num_iterations', '500'],
     #'jacobi-2d' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/jacobi-2d', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/jacobi-2d/jacobi-2d.c', '--function_name', 'kernel_jacobi-2d', '--num_iterations', '500'],
-    #'doitgen' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/kernels/doitgen', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/kernels/doitgen/doitgen.c', '--function_name', 'kernel_doitgen', '--num_iterations', '500'],
+    ##'doitgen' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/kernels/doitgen', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/kernels/doitgen/doitgen.c', '--function_name', 'kernel_doitgen', '--num_iterations', '500'],
     #'deriche' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/medley/deriche', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/medley/deriche/deriche.c', '--function_name', 'kernel_deriche', '--num_iterations', '500'],
-    #'syr2k' : ['', '--include_dirs', polyite_dir + '/polybench-c-4.1/utilities ' + polyite_dir + '/polybench-c-4.1/linear-algebra/blas/syr2k', '--source_files', polyite_dir + '/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polybench-c-4.1/linear-algebra/blas/syr2k/syr2k.c', '--function_name', 'kernel_syr2k', '--num_iterations', '500'],
+    ###'syr2k' : ['', '--include_dirs', polyite_dir + '/polybench-c-4.1/utilities ' + polyite_dir + '/polybench-c-4.1/linear-algebra/blas/syr2k', '--source_files', polyite_dir + '/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polybench-c-4.1/linear-algebra/blas/syr2k/syr2k.c', '--function_name', 'kernel_syr2k', '--num_iterations', '500'],
     #'lu' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/lu', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/lu/lu.c', '--function_name', 'kernel_lu', '--num_iterations', '500'],
     #'jacobi-1d' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/jacobi-1d', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/jacobi-1d/jacobi-1d.c', '--function_name', 'kernel_jacobi-1d', '--num_iterations', '500'],
     #'fdtd-2d' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/fdtd-2d', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/fdtd-2d/fdtd-2d.c', '--function_name', 'kernel_fdtd-2d', '--num_iterations', '500'],
@@ -51,7 +50,7 @@ polybench_invocations = {
     #'cholesky' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/cholesky', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/cholesky/cholesky.c', '--function_name', 'kernel_cholesky', '--num_iterations', '500'],
     #'nussinov' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/medley/nussinov', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/medley/nussinov/nussinov.c', '--function_name', 'kernel_nussinov', '--num_iterations', '500'],
     #'floyd-warshall' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/medley/floyd-warshall', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/medley/floyd-warshall/floyd-warshall.c', '--function_name', 'kernel_floyd-warshall', '--num_iterations', '500'],
-    #'trisolv' : ['', '--include_dirs', polyite_dir + '/polybench-c-4.1/utilities ' + polyite_dir + '/polybench-c-4.1/linear-algebra/solvers/trisolv', '--source_files', polyite_dir + '/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polybench-c-4.1/linear-algebra/solvers/trisolv/trisolv.c', '--function_name', 'kernel_trisolv', '--num_iterations', '500'],
+    #'trisolv' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/trisolv', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/trisolv/trisolv.c', '--function_name', 'kernel_trisolv', '--num_iterations', '500'],
     #'durbin' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/durbin', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/durbin/durbin.c', '--function_name', 'kernel_durbin', '--num_iterations', '500'],
     #'seidel-2d' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/seidel-2d', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/seidel-2d/seidel-2d.c', '--function_name', 'kernel_seidel-2d', '--num_iterations', '500'],
     #'gramschmidt' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/gramschmidt', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/gramschmidt/gramschmidt.c', '--function_name', 'kernel_gramschmidt', '--num_iterations', '500'],
@@ -59,8 +58,8 @@ polybench_invocations = {
     #'symm' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/blas/symm', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/blas/symm/symm.c', '--function_name', 'kernel_symm', '--num_iterations', '500'],
 
     #'ludcmp' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/ludcmp', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/linear-algebra/solvers/ludcmp/ludcmp.c', '--function_name', 'kernel_ludcmp', '--num_iterations', '500'],
-    #'heat-3d' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/heat-3d', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/heat-3d/heat-3d.c', '--function_name', 'kernel_heat-3d', '--num_iterations', '500'],
-    #'adi' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/adi', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/adi/adi.c', '--function_name', 'kernel_adi', '--num_iterations', '500'],
+    ###'heat-3d' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/heat-3d', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/heat-3d/heat-3d.c', '--function_name', 'kernel_heat-3d', '--num_iterations', '500'],
+    ###'adi' : ['', '--include_dirs', polyite_dir + '/polyite/polybench-c-4.1/utilities ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/adi', '--source_files', polyite_dir + '/polyite/polybench-c-4.1/utilities/polybench.c ' + polyite_dir + '/polyite/polybench-c-4.1/stencils/adi/adi.c', '--function_name', 'kernel_adi', '--num_iterations', '500'],
 }
 
 
@@ -510,14 +509,18 @@ class LineSummand(ScheduleSummand):
 
 def computeDomInfo(domain):
     ctx = domain.get_ctx()
+    #print("a1 ctx: ",ctx)
     count = 0
     i = 0
     nrStmts = domain.n_set()
+    #print("a1 nrStmts : ", nrStmts)
     domainSets = list()
     setList = domain.get_set_list()
+    #print("a1 setList : ", setList)
     for i in range(setList.n_set()):
         lSet = setList.get_set(i)
         domainSets.append(lSet)
+        #print("d1 omainSets : ", domainSets)
         count = count + lSet.dim(isl.dim_type.set)
         i += 1
 
@@ -529,6 +532,7 @@ def computeDomInfo(domain):
     nrIt = count
     count = 0
     domainParDim = domain.params().dim(isl.dim_type.param)
+    #print("a1 domainParDim : ", domainParDim)
     i = 0
     for lSet in domainSets:
         stmtNrIt = lSet.dim(isl.dim_type.set)
@@ -551,12 +555,13 @@ def preprocess(deps, domain):
     """Only dependencies and domain are needed as parameters"""
     result = list()
     maxSplit = 100
-
+    lstMaps = []
     def depIterator(lMap):
         intermediate = list()
         i = 0
         mapUnwrapped = lMap.uncurry().domain().unwrap() if lMap.range_is_wrapping() else lMap
         depsMap = mapUnwrapped
+        lstMaps.append(depsMap)
         # simulate do-while loop
         while True:
             dep = depsMap.lexmin().coalesce()
@@ -587,7 +592,7 @@ def preprocess(deps, domain):
         return max(basicMap.get_tuple_name(isl.dim_type.in_), basicMap.get_tuple_name(isl.dim_type.out))
 
     result.sort(key=sortKey)
-    return result
+    return result, lstMaps
 
 
 def compSchedConstrForDep(dep, domInfo, strongSatisfy):
@@ -659,6 +664,8 @@ def compSchedConstrForDep(dep, domInfo, strongSatisfy):
     # expand dimensionality to global schedule constraints
     stmtSrcInfo = domInfo.stmtInfo[depSrcName]
     stmtDstInfo = domInfo.stmtInfo[depDstName]
+    #print("a1 parstart :", stmtSrcInfo.parStart)
+    #print("a1 cstIdx :" , stmtSrcInfo.cstIdx)
     (srcItOff, srcNrIt, srcParOff, srcCstIdx) = (
     stmtSrcInfo.itStart, stmtSrcInfo.nrIt, stmtSrcInfo.parStart, stmtSrcInfo.cstIdx)
     (dstItOff, dstNrIt, dstParOff, dstCstIdx) = (
@@ -742,19 +749,19 @@ def calcDepsAndDomInfo(params, domain, sched, reads, writes, additional=None):
     deps = antiOut.union(flow).coalesce()
     if additional is not None:
         deps = deps.union(additional).coalesce()
-    # print(deps)
     domInfo = computeDomInfo(domain)
-    depList = preprocess(deps, domain)
+    depList, lstDepMaps = preprocess(deps, domain)
+    #print("a1 dep list: ", depList)
     # print("-----")
-    # print("Dep list after preprocess:")
-    # print(depList)
+    #print("Dep list after preprocess:")
+    #print(depList)
     dependences = bMaps2Deps(depList, domInfo, 0)
-
-    return (dependences, domInfo)
+    #return (dependences, domInfo, deps)
+    return (dependences, domInfo, lstDepMaps)
 
 
 def constructOneDimensionalSchedulePolyhedron(params, domain, schedule, reads, writes, additional=None):
-    (dependences, domInfo) = calcDepsAndDomInfo(params, domain, schedule, reads, writes, additional)
+    (dependences, domInfo, depsMaps) = calcDepsAndDomInfo(params, domain, schedule, reads, writes, additional)
     schedulePoly = domInfo.universe.copy()
     for i, dependence in enumerate(dependences):
         schedulePoly = schedulePoly.intersect(dependence.strongConstr)
@@ -762,7 +769,7 @@ def constructOneDimensionalSchedulePolyhedron(params, domain, schedule, reads, w
 
 
 def constructMultiDimensionalSchedulePolyhedrons(params, domain, schedule, reads, writes, prob2Carry=0.4, additional=None):
-    (dependences, domInfo) = calcDepsAndDomInfo(params, domain, schedule, reads, writes, additional)
+    (dependences, domInfo, depsMaps) = calcDepsAndDomInfo(params, domain, schedule, reads, writes, additional)
     # first check if there might exist any schedule
     schedulePoly = domInfo.universe.copy()
     for dependence in dependences:
@@ -1249,13 +1256,15 @@ def parse_args():
 def main():
     args, compilation_params, config, scop_file, jsonp, scop = parse_args()
 
-    (dependences, domInfo) = calcDepsAndDomInfo(scop.context.params(), scop.domain, scop.schedule,
+    (dependences, domInfo, depsMaps) = calcDepsAndDomInfo(scop.context.params(), scop.domain, scop.schedule,
                                                 scop.reads().gist_domain(scop.domain),
                                                 scop.writes().gist_domain(scop.domain))
     print('Dependences:')
     print(dependences)
     print('Domain Info:')
     print(domInfo)
+    print('Deps Maps:')
+    print(depsMaps)
 
     c_code = printScheduleAsProgram(scop.context.params(), islScheduleMap2IslScheduleTree(jsonp, scop.schedule))
     print('Original Schedule (AST / C Code representation):')

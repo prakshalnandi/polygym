@@ -95,7 +95,7 @@ class DQN(Agent):
         self.batch_size = batch_size
         self.gamma = gamma
         self.hidden_size = hidden_size
-        self.epsilon = 0.85
+        self.epsilon = 0.65
         # ######################################### #
 
         self.saveables.update(

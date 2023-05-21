@@ -15,6 +15,11 @@ import polygym
 import schedule_eval
 
 import pudb
+import islpy as isl
+import re
+from sympy import symbols, Poly, simplify, parsing
+import sympy
+from sympy.parsing.sympy_parser import (parse_expr, standard_transformations, implicit_multiplication)
 
 ILLEGAL_ACTION_REWARD = 0
 EXECUTION_TIME_CUTOFF_FACTOR = 1000  # Schedules beyond this factor wrt. O3 are terminated
@@ -43,8 +48,12 @@ MAX_NUM_EDGES = 200
 #MAX_NUM_NODE_TYPES = model.ANNOTATION_SIZE
 MAX_NUM_NODES = 200
 
-MAX_NUM_DEPS = 10
+MAX_NUM_DEPS = 5
 MAX_NUM_DIMS = 10
+
+MAX_LOOP_VARS = 4
+MAX_BOUND = 4
+MAX_STMT_MEM_COUNT = 2 * MAX_LOOP_VARS + 1
 
 REWARD_EXPONENT = 3
 
@@ -79,6 +88,163 @@ class PolyEnv(gym.Env):
             'previous_coeff_vectors': Box(0, 1, shape=[1, 1]),
         })
 
+
+    def _getDepValues(self,space):
+        lstNewDep = []
+        split_name = space.split('[')[0]
+        if(len(re.findall("\d+", split_name)) == 0):
+            lstNewDep.append("0")
+        else:
+            lstNewDep.append(int(re.findall("\d+", split_name)[0]))
+        split_comma = str(re.findall(r'\[.*?\]', space)).split(',')
+        for member in split_comma:
+            lstNewDep.append(int(re.findall("\d+", member)[0]))
+        return tuple(lstNewDep)
+
+    def _depsToVector(self, deps, lstSpaces):
+
+        for dep in deps:
+            bmap = dep.baseMap
+            space = bmap.get_space()
+            split_space = str(space).split("->")
+            lstDeps = []
+            lstDeps.append(self._getDepValues(split_space[1]))
+            lstDeps.append(self._getDepValues(split_space[2]))
+            lstSpaces.append(tuple(lstDeps))
+        return lstSpaces
+
+    def _getDepValues2(self,space):
+        
+        arrDep = np.full((3),-1)
+        split_name = space.split('[')[0]
+        split_comma = str(re.findall(r'\[.*?\]', space)).split(',')
+        for i,member in enumerate(split_comma):
+            arrDep[i] = (int(re.findall("\d+", member)[0]))
+        return arrDep
+
+    def _depsToVector2(self, dep):
+
+        bmap = dep.baseMap
+        space = bmap.get_space()
+        split_space = str(space).split("->")
+        arrDeps = np.full((2,3),-1)
+        arrDeps[0] = self._getDepValues2(split_space[1])
+        arrDeps[1] = self._getDepValues2(split_space[2])
+        return arrDeps
+
+    def _getDictForReplacers(self, iSpace):
+        oDictReplacers = {"i0'":'i4',"i1'":'i5',"i2'":'i6',"i3'":'i7'}
+        split_space = str(iSpace).split("->")
+        depParams = split_space[0]
+        splitParam = depParams.split(",")
+        numVar = 6
+        for param in splitParam:
+            param = param.replace('[','')
+            param = param.replace(']','')
+            param = param.replace(' ','')
+            strVar = 'i' + str(numVar)
+            oDictReplacers[param] = strVar
+            numVar = numVar + 1
+        return oDictReplacers
+
+    def _replacePrime(self, strMain, iDict):    
+    
+        for item in iDict:       
+            strMain = strMain.replace(item, iDict[item])
+        return strMain
+
+    def _getInEqualities(self, strEquation):
+
+        lstEq = []
+        transformations = standard_transformations + (implicit_multiplication,)
+
+        if (strEquation.count('<=') == 2):
+            splitStr = strEquation.split('<=')
+            left = parsing.sympy_parser.parse_expr(splitStr[0], transformations=transformations)
+            mid = parsing.sympy_parser.parse_expr(splitStr[1], transformations=transformations)
+            right = parsing.sympy_parser.parse_expr(splitStr[2], transformations=transformations)
+            lstEq.append(simplify(left - mid))
+            lstEq.append(simplify(mid - right))
+        elif (strEquation.count('<') == 2 and strEquation.count('<=') == 1):
+            splitStr = strEquation.split('<=')
+            left = splitStr[0]
+            right = splitStr[1]
+            if('<' in left):
+                splitleft = left.split('<')
+                splitleftleft = parsing.sympy_parser.parse_expr(splitleft[0], transformations=transformations)
+                splitleftright = parsing.sympy_parser.parse_expr(splitleft[1], transformations=transformations)
+                lstEq.append(simplify(splitleftleft - splitleftright) + 1)
+                lstEq.append(simplify(splitleftright - parsing.sympy_parser.parse_expr(right)))
+            else:
+                splitright = right.split('<')
+                splitrightleft = parsing.sympy_parser.parse_expr(splitright[0], transformations=transformations)
+                splitrighttright = parsing.sympy_parser.parse_expr(splitright[1], transformations=transformations)
+                lstEq.append(simplify(parsing.sympy_parser.parse_expr(left) - splitrightleft))
+                lstEq.append(simplify(splitrightleft - splitrighttright) + 1)
+
+        elif (strEquation.count('<') == 2):
+            splitStr = strEquation.split('<')
+            left = parsing.sympy_parser.parse_expr(splitStr[0], transformations=transformations)
+            mid = parsing.sympy_parser.parse_expr(splitStr[1], transformations=transformations)
+            right = parsing.sympy_parser.parse_expr(splitStr[2], transformations=transformations)
+            lstEq.append(simplify(left - mid) + 1)
+            lstEq.append(simplify(mid - right) + 1)
+        elif('<=' in strEquation):
+            splitLeftRight = strEquation.split('<=')
+            left = parsing.sympy_parser.parse_expr(splitLeftRight[0], transformations=transformations)
+            right = parsing.sympy_parser.parse_expr(splitLeftRight[1], transformations=transformations)
+            lstEq.append(simplify(left - right))
+        elif('<' in strEquation):
+            splitLeftRight = strEquation.split('<')
+            left = parsing.sympy_parser.parse_expr(splitLeftRight[0], transformations=transformations)
+            right = parsing.sympy_parser.parse_expr(splitLeftRight[1], transformations=transformations)
+            lstEq.append(simplify(left - right) + 1)
+        elif(strEquation.count('>=') == 1):
+            splitLeftRight = strEquation.split('>=')
+            left = parsing.sympy_parser.parse_expr(splitLeftRight[0], transformations=transformations)
+            right = parsing.sympy_parser.parse_expr(splitLeftRight[1], transformations=transformations)
+            lstEq.append(simplify(right - left))
+        elif(strEquation.count('>') == 1):
+            splitLeftRight = strEquation.split('>')
+            left = parsing.sympy_parser.parse_expr(splitLeftRight[0], transformations=transformations)
+            right = parsing.sympy_parser.parse_expr(splitLeftRight[1], transformations=transformations)
+            lstEq.append(simplify(right - left) + 1)
+        elif(strEquation.count('=') == 1):
+            splitLeftRight = strEquation.split('=')
+            left = parsing.sympy_parser.parse_expr(splitLeftRight[0], transformations=transformations)
+            right = parsing.sympy_parser.parse_expr(splitLeftRight[1], transformations=transformations)
+            lstEq.append(simplify(left - right))
+            lstEq.append(simplify(right - left))
+        else:
+            return []
+
+        return lstEq
+
+    def _getCoEffs(self, strEq):
+        constant = 0
+        i0, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11 = symbols("i0 i1 i2 i3 i4 i5 i6 i7 i8 i9 i10 i11")
+        if(len(strEq.args) > 0):
+            constant = strEq.func(*[x for x in strEq.args if not x.free_symbols])
+        return np.array([strEq.coeff(i0), strEq.coeff(i1), strEq.coeff(i2), strEq.coeff(i3), strEq.coeff(i4), strEq.coeff(i5), strEq.coeff(i6), strEq.coeff(i7), strEq.coeff(i8), constant])
+
+    def _extractCoefficients(self, iSpace):
+        arrDep = np.zeros((208))    
+        splitStmtBounds = str(iSpace).split(":")
+        stmtSpace = splitStmtBounds[0]
+        stmtBound = splitStmtBounds[1]
+        stmtBound = stmtBound.replace(' ','')
+        stmtBound = stmtBound.replace('}','')
+        strEquations = stmtBound.split("and")
+        dictReplacers = self._getDictForReplacers(stmtSpace)
+        intCount = 0
+        for strEquation in strEquations:
+            strEquation = self._replacePrime(strEquation, dictReplacers)
+            lstEqs = self._getInEqualities(strEquation)
+            for itemEq in lstEqs:
+                intCount += 1
+                np.put(arrDep, np.arange(intCount*10, (intCount+1)*10),self._getCoEffs(itemEq))
+        return arrDep
+
     def _set_sample(self, sample_name):
         if not sample_name:
             print('Selecting random sample')
@@ -92,12 +258,20 @@ class PolyEnv(gym.Env):
             # Construct sample
             # - Polyhedral SCoP description
             _, compilation_params, config, scop_file, jsonp, scop = polygym.parse_args()
-            deps, dom_info = polygym.calcDepsAndDomInfo(scop.context.params(), scop.domain,
+            deps, dom_info, depsMaps  = polygym.calcDepsAndDomInfo(scop.context.params(), scop.domain,
                                                         scop.schedule,
                                                         scop.reads().gist_domain(scop.domain),
                                                         scop.writes().gist_domain(scop.domain))
 
             #pudb.set_trace()
+            #print("deps: ", deps)
+            #print("len deps: ", len(deps))
+            #print("scop schedule: ", scop.schedule)
+            #for x in deps:
+                #b = x.baseMap
+                #print("Map: ",b)
+                #print("space: ", b.get_space())
+            #print("deps statements: ",  tuple([(x.tupleNameIn, x.tupleNameOut) for x in deps]))
             # - Representations
 #            dep_reps_by_deps = {dep: representation.construct_dependency_graph(compilation_params,
 #                                                                               scop_file,
@@ -126,6 +300,7 @@ class PolyEnv(gym.Env):
                 'scop': scop,
                 'deps': deps,
                 'dom_info': dom_info,
+                'depsMaps' : depsMaps,
 #                'dep_reps_by_deps': dep_reps_by_deps,
                 'O3_execution_time': O3_execution_time,
                 'ref_output': out_array
@@ -161,7 +336,7 @@ class PolyEnv(gym.Env):
 
         return ret
 
-    def reset(self, sample_name=None, with_repr=False, with_ast_and_map=True):
+    def reset(self, sample_name=None, with_repr=False, with_ast_and_map=True, dep_rep='simple'):
         self._set_sample(sample_name)
 
         self.with_ast_and_map = with_ast_and_map
@@ -177,6 +352,16 @@ class PolyEnv(gym.Env):
         self.stronglyCarried = []
         self.availableDeps = self.sample['deps'].copy()
         self.uncarriedDeps = set(self.sample['deps'])
+
+        self.depsDict = {self.availableDeps[i]: i for i in range(0, len(self.availableDeps))}
+        print("depsDict: ", self.depsDict)
+
+        self.lstAvailableDeps = [0] * 41
+        self.lstAvailableDeps[:len(self.availableDeps)] = [1] * len(self.availableDeps)
+
+        self.lstDimDeps = [-1] * 41
+        self.lstCurDimDeps = [0] * 41
+
 
         self.coeffs_and_summands_by_dim = []
 
@@ -195,7 +380,8 @@ class PolyEnv(gym.Env):
         self.strongDepForDim = 0
         self.DepNum = 0
         self.Deps = []
-        
+        self.AddedMaps =  []
+
         #self.obs2 = [[None],[None]]
         self.obs2 = [[-1],[-1]]
         self.nstate = None
@@ -241,13 +427,24 @@ class PolyEnv(gym.Env):
                 #'previous_deps_by_dim': [[representation.construct_null_dependency_graph()]],
                 #'previous_coeff_vectors': [np.zeros([10])],
             })
+
+        print("dep_Rep: ", dep_rep)
+        intParams = 4
+        if dep_rep == 'complex_coeff':
+            intParams = 211
+        elif dep_rep == 'complex_full':
+            intParams = 291
         
         state2 = {
             'action_mask': np.concatenate([np.ones(3), np.zeros(3)]) if self.status == Status.construct_space \
                 else np.concatenate([np.zeros(3), np.ones(3)]),
             #'observation': [None] * 4,
-            'observation': [-1] * 4,
+            #'observation': [-1] * 4,
+            #'observation' : np.full((10),-1).tolist(),
+            'observation' : np.full((intParams),-1).tolist()
         }
+
+        print("state2 : ", state2)
 
         self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = len(self.sample['deps']) * 2 + 1
         self.MAX_CONSECUTIVE_NEXT_DIMS = 1
@@ -319,7 +516,7 @@ class PolyEnv(gym.Env):
         self.stronglyCarried.clear()
         self._carry_uncarried_deps_weakly()
 
-    def step(self, action, with_repr=False):
+    def step(self, action, with_repr=False, dep_rep='dep_rep'):
         self.num_steps += 1
 
         # Map to enum
@@ -386,7 +583,7 @@ class PolyEnv(gym.Env):
             #self.obs[2] = self.strongDepForDim
             self.obs[2] = self.Deps
             self.obs[3] = len(self.availableDeps)
-            #print("state before action", self.obs)
+
             # Polyhedra construction
             if self.status != Status.construct_space:
                 raise Exception
@@ -399,6 +596,7 @@ class PolyEnv(gym.Env):
                 
                 self.strongDepForDim = 0
                 self.Deps = []
+                self.AddedMaps = []
 
                 self._complete_construct_maybe()
 
@@ -409,6 +607,14 @@ class PolyEnv(gym.Env):
 
             elif action == Action.select_dep:
                 dep = self.availableDeps[self.dep_ptr]
+                #bm = dep.baseMap
+                #print("dep : ", dep)
+                #print("dep space: ", bm.get_space())
+
+                #print("dep domain map: ", bm.domain_map())
+                #print("domain: ", bm.domain())
+                #print("flatten: ", bm.flatten())
+                
                 self.stronglyCarried.append(dep)
 
                 self.strongDepForDim += 1
@@ -417,7 +623,12 @@ class PolyEnv(gym.Env):
 
                 self.DepNum += 1
                 self.Deps.append(dep)
-                
+
+                self.lstAvailableDeps[self.depsDict[dep]] = 0
+
+                self.lstDimDeps[self.depsDict[dep]] = self.dim_ptr
+                self.lstCurDimDeps = [int(self.lstDimDeps[i] == self.dep_ptr) for i in range(len(self.lstDimDeps)) ]
+
 
                 if len(self.availableDeps) == 0:
                     self._complete_construct_maybe()
@@ -425,17 +636,46 @@ class PolyEnv(gym.Env):
                 if self.dep_ptr >= len(self.availableDeps):
                     self.dep_ptr = 0
 
-            self.obs[0] = self.dim_ptr
-            self.obs[1] = self.dep_ptr
+            ####self.obs[0] = self.dim_ptr
+            ####self.obs[1] = self.dep_ptr
             #self.obs[1] = self.DepNum
-            self.obs[2] = self.strongDepForDim
-            #self.obs[2] = tuple(self.Deps)
-            ##self.obs[2] = tuple([(x.tupleNameIn, x.tupleNameOut) for x in self.Deps])
-            #print("obs[2]: ", self.obs[2])
-            self.obs[3] = len(self.availableDeps)
-            #print("state after action", self.obs)
-            self.nstate = self.obs
-            state2['observation'] = self.obs
+            ## Num of strong deps aded in current dim
+            #self.obs[2] = self.strongDepForDim
+
+            ## stmt names for deps added in current dim
+            #self.obs[2] = tuple([(x.tupleNameIn, x.tupleNameOut) for x in self.Deps])
+            ## state as array including dependency Vector for cuurent Dep 
+            
+            ###### array space
+            #arrObs = np.array([self.obs[0],self.obs[1]])
+            arrObs = np.array([self.dim_ptr])
+            
+            if(dep_rep == 'simple'):
+                arrObs = np.append(arrObs,self.dep_ptr)
+            else:
+                if (len(self.availableDeps) == 0):
+                    arrObs = np.append(arrObs, np.zeros((208)))
+                else:
+                    cur_dep = self.availableDeps[self.dep_ptr]
+                    bm = cur_dep.baseMap
+                    arrObs = np.append(arrObs, self._extractCoefficients(str(bm.flatten())))
+
+            if 'full' in dep_rep:
+                arrObs = np.append(arrObs, np.array(self.lstAvailableDeps))
+                arrObs = np.append(arrObs, np.array(self.lstCurDimDeps))
+            else:
+                arrObs = np.append(arrObs, self.strongDepForDim)
+                arrObs = np.append(arrObs,len(self.availableDeps))
+            ###### array space
+
+            ####self.obs[3] = len(self.availableDeps)
+            ###self.nstate = self.obs
+            ###state2['observation'] = self.obs
+
+    
+            state2['observation'] = arrObs.tolist()
+            #state2['observation'] = arrDep.tolist()
+            #print("state2 : ",state2['observation'])
 
             # State
             if with_repr:
@@ -573,6 +813,7 @@ class PolyEnv(gym.Env):
             state2['action_mask'][Action.select_dep.value] = 0
 
         state_filtered = self._filter_state(state, with_repr)
+        #print("state2: ", state2)
 
         #return state_filtered, reward, False, info
         return state2, reward, False, info
