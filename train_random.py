@@ -9,7 +9,7 @@ import pandas as pd
 from absl import app
 from absl import flags
 
-import tqdm
+#import tqdm
 
 import environment
 import polygym
@@ -20,7 +20,7 @@ import pickle
 import time
 
 from buffer import Buffer
-from agents import QLearningAgent
+from agents import QLearningAgent, QLApproxAgent
 
 import pudb
 from environment import Status
@@ -41,7 +41,7 @@ flags.DEFINE_string('dep_rep', '', 'The type of state representation.') #simple 
 FLAGS = flags.FLAGS
 
 PARAMETERS = {
-    "gamma": 0.99,
+    "gamma": 0.95,
     "alpha": 0.1,
     "epsilon": 0.9,
 }
@@ -82,47 +82,39 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_b
     #)
 
     try:
+        mask = state['action_mask']
         if predef_actions:
             predef_actions_idx = 0
-        while not done:
-            if predef_actions:
-                action_idx = predef_actions[predef_actions_idx]
-                predef_actions_idx += 1
-            elif sampling_bias:
-                mask = state['action_mask']
-                possibilities = mask * range(len(mask))
-                if sampling_bias == 'bias_coeff0':
-                    p = mask * [1, 1, 1, 1, 0.15, 0.15]
-                elif sampling_bias == 'bias_select_dep':
-                    p = mask * [0.2, 0.2, 0.6, 1, 1, 1]
-                else:
-                    raise Exception
-                p /= p.sum()        # Normalize
-                action_idx = int(np.random.choice(possibilities, p=p))
-            else:
-                action_idx = np.random.choice(np.nonzero(state['action_mask'])[0])
-            #action = list(environment.Action)[action_idx]
-            #actions.append(action_idx)
-            #print("status", env.status)
-            #print("action_index: ", action_idx)
-            #if action_idx < 2:
-            #pudb.set_trace()
+        while not done and len(mask) != 0:
+            mask = state['action_mask']
             if env.status == Status.construct_space:
 
                 actList = [index for index,value in enumerate(mask) if value == 1]
                 #print("mask", mask)
                 #print("actList", actList)
-                action_idx = agent.choose_action(tuple(np.array(state['observation'],dtype=object)), actList, blnTraining)
+                if(len(actList) == 0):
+                    action_idx = 2
+                else:
+                    action_idx = agent.choose_action(tuple(np.array(state['observation'],dtype=object)), actList, blnTraining, isExplore)
+                #action_idx = agent.choose_action(tuple(np.array(state['observation'],dtype=object)), actList, blnTraining, isExplore)
                 #print("agent_act_const", action_idx)
 
             else:
                 if(isExplore == False):
-                    state['observation'] = [None] * 2
+                    state['observation'] = [None] * 53
+                    #state['observation'] = [0] * 36
                     isExplore = True
                 actList = [index for index,value in enumerate(mask) if value == 1]
                 #print("mask", mask)
                 #print("actList", actList
-                action_idx = agent_ex.choose_action(tuple(np.array(state['observation'],dtype=object)), actList, blnTraining)
+                if not actList:
+                    print("empty actList: ", actList)
+                    print("empty mask: ", mask)
+                    action_idx = 3
+                else:
+                    #action_idx = agent_ex.choose_action(tuple(np.array(state['observation'],dtype=object)), actList, blnTraining, isExplore)
+                    #print("action_idx", action_idx)
+                    action_idx = 3
                 #print("agent_act_explore:", action_idx)
             
             action = list(environment.Action)[action_idx]
@@ -140,7 +132,7 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_b
                         np.array([done]),
                         )   
                 else:
-                    #print("explore state: ",  nstate['observation'])
+
                     if isExplore:
                         memory_ex.add(np.array(state['observation'],dtype=object),
                             np.array([action_idx]),
@@ -173,6 +165,8 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  sampling_b
 
 def bench(invocation, optimization=None, clang_exe=None, additional_params=None):
     sys.argv = invocation
+    #pudb.set_trace()
+    print("Inside bench")
     _, compilation_params, config, scop_file, jsonp, scop = polygym.parse_args()
 
     if clang_exe:
@@ -272,29 +266,112 @@ def main(argv):
         env = environment.PolyEnv(env_config)
         blnTesting = False
         to_process = list(polygym.polybench_invocations.keys())
+        #test_process = copy.deepcopy(to_process[-1])
+        #print("to process: ", to_process)
+        #print("testing sample: ", to_process[-1])
+        #agent = QLApproxAgent(
+        #            action_space=env.action_space,
+        #            gamma=PARAMETERS["gamma"],
+        #            alpha=PARAMETERS["alpha"],
+        #            epsilon=PARAMETERS["epsilon"],
+        #            num_weights=291,
+        #            )
 
-        agent = QLearningAgent(
-                    action_space=env.action_space,
-                    gamma=PARAMETERS["gamma"],
-                    alpha=PARAMETERS["alpha"],
-                    epsilon=PARAMETERS["epsilon"],
-                    )
+        #agent_ex = QLApproxAgent(
+        #            action_space=env.action_space,
+        #            gamma=PARAMETERS["gamma"],
+        #            alpha=PARAMETERS["alpha"],
+        #            epsilon=PARAMETERS["epsilon"],
+        #            num_weights=36,
+        #            )
 
-        agent_ex = QLearningAgent(
-                    action_space=env.action_space,
-                    gamma=PARAMETERS["gamma"],
-                    alpha=PARAMETERS["alpha"],
-                    epsilon=PARAMETERS["epsilon"],
-                    )
-
-        print("Initializing Agents")
+        #print("Initializing Agents")
         #i = 0
         #while True:
-        for i in range(FLAGS.stop_at):
-            print('to_process: ' + str(to_process))
-            print('len(to_process): ' + str(len(to_process)))
+        #for sample_name in tqdm.tqdm(to_process[:-1]):
+        for idp in range(len(to_process)):
+            train_process = copy.deepcopy(to_process)
+            test_process = to_process[idp]
+            
+            print("Initializing Agents")
+            
+            agent = QLApproxAgent(
+                    action_space=env.action_space,
+                    gamma=PARAMETERS["gamma"],
+                    alpha=PARAMETERS["alpha"],
+                    epsilon=PARAMETERS["epsilon"],
+                    num_weights=291,
+                    )
 
-            for sample_name in tqdm.tqdm(to_process):
+            agent_ex = QLApproxAgent(
+                    action_space=env.action_space,
+                    gamma=PARAMETERS["gamma"],
+                    alpha=PARAMETERS["alpha"],
+                    epsilon=PARAMETERS["epsilon"],
+                    num_weights=36,
+                    )
+            for i in range(FLAGS.stop_at):
+            #for i in range(FLAGS.stop_at):
+                #print('to_process: ' + str(to_process))
+                #print('len(to_process): ' + str(len(to_process)))
+                agent.schedule_hyperparameters(i, FLAGS.stop_at)
+                agent_ex.schedule_hyperparameters(i, FLAGS.stop_at)
+                #for i in range(FLAGS.stop_at):
+                #for sample_name in tqdm.tqdm(train_process):
+                train_process_it = copy.deepcopy(to_process)
+                for j in range(len(train_process_it)):
+                    sample_name = random.choice(train_process_it)
+                    if(sample_name != test_process):
+                    #for sample_name in tqdm.tqdm(to_process):
+                        #agent.schedule_hyperparameters(i, FLAGS.stop_at)
+                        csv_filename = os.path.join(FLAGS.out_dir, sample_name + '.csv')
+
+                        # Remove sample from eval if its evaluated enough already
+                        if FLAGS.stop_at and os.path.isfile(csv_filename) and i % 1 == 0:
+                            df = pd.read_csv(csv_filename, sep="\t")
+                            num_ok = len(df[df['status'] == 'ok'])
+                            print('sample_name: %s, num_ok: %i' % (sample_name, num_ok))
+                            if num_ok > FLAGS.stop_at:
+                                train_process.remove(sample_name)
+                                print('removed element: ' + sample_name)
+                                continue
+                        # Bench
+                        blnTesting = False
+                        reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  FLAGS.with_polyenv_sampling_bias, iDep_rep=FLAGS.dep_rep)
+
+                        speedup = env.reward_to_speedup(reward)
+                        #print('speedup :' + str(speedup))
+                        print('speedup :' + str(speedup), " for sample name: ", sample_name)
+                        exec_time = env.speedup_to_execution_time(speedup)
+                        print('exectime :' + str(exec_time))
+                        for io in range(memory.entries):
+                            #print("memory record state : ", memory.records.states[io])                    
+                            if (memory.records.actions[io][0] in [0,1,2]) and (blnTesting == False):
+                                agent.update_weights(tuple(memory.records.states[io]),
+                                        memory.records.actions[io][0],
+                                        reward,
+                                        tuple(memory.records.next_states[io]),
+                                        memory.records.done[io][0])
+
+                        #for io2 in range(memory_ex.entries):
+                        #    if (memory_ex.records.actions[io2][0] in [3,4,5])and (blnTesting == False):
+                        #        #print("memory_ex record state : ", memory_ex.records.states[io2])
+                        #        agent_ex.update_weights(tuple(memory_ex.records.states[io2]),
+                        #                memory_ex.records.actions[io2][0],
+                        #                reward,
+                        #                tuple(memory_ex.records.next_states[io2]),
+                        #                memory_ex.records.done[io2][0])
+
+                        create_csv_if_not_exists(csv_filename, ['method', 'execution_time', 'status', 'actions', 'ast', 'isl_map'])
+                        append_to_csv(csv_filename, ['PolyEnv-random', exec_time, status, str(actions), str(ast), str(isl_map)])
+                        train_process_it.remove(sample_name)
+
+            sample_name = test_process
+            total_speedup = 0
+            blnTesting = True
+            for i in range(FLAGS.stop_at):
+            #for sample_name in tqdm.tqdm(to_process):
+                agent.schedule_hyperparameters(i, FLAGS.stop_at)
                 csv_filename = os.path.join(FLAGS.out_dir, sample_name + '.csv')
 
                 # Remove sample from eval if its evaluated enough already
@@ -303,69 +380,27 @@ def main(argv):
                     num_ok = len(df[df['status'] == 'ok'])
                     print('sample_name: %s, num_ok: %i' % (sample_name, num_ok))
                     if num_ok > FLAGS.stop_at:
-                        to_process.remove(sample_name)
+                        train_process.remove(sample_name)
                         print('removed element: ' + sample_name)
                         continue
-                #agent = QLearningAgent(
-                #    action_space=env.action_space,
-                #    gamma=PARAMETERS["gamma"],
-                #    alpha=PARAMETERS["alpha"],
-                #    epsilon=PARAMETERS["epsilon"],
-                #    )
-                ##if (i > FLAGS.stop_at - 4):
-                #if (sample_name == 'mvt'):
-                if (i > FLAGS.stop_at - 4):
-                    #pudb.set_trace()
-                    print("Testing")
-                    blnTesting = True
-                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  FLAGS.with_polyenv_sampling_bias, blnTraining=False, iDep_rep=FLAGS.dep_rep)
-                else:
-                    # Bench
-                    blnTesting = False
-                    reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  FLAGS.with_polyenv_sampling_bias, iDep_rep=FLAGS.dep_rep)
+                print("Testing ",sample_name)
+                #blnTesting = True
+                reward, status, actions, ast, isl_map, memory, memory_ex = gen_and_bench_random_schedule(env, sample_name, agent, agent_ex,  FLAGS.with_polyenv_sampling_bias, blnTraining=False, iDep_rep=FLAGS.dep_rep)
 
                 speedup = env.reward_to_speedup(reward)
                 #print('speedup :' + str(speedup))
-                if blnTesting:
-                    print('testing speedup :' + str(speedup), " for sample name: ", sample_name)
-                else:
-                    print('speedup :' + str(speedup), " for sample name: ", sample_name)
+                print('testing speedup :' + str(speedup), " for sample name: ", sample_name)
                 exec_time = env.speedup_to_execution_time(speedup)
                 print('exectime :' + str(exec_time))
+                total_speedup += speedup
 
-                #print("previous Q Table")
-                #print(agent.q_table)
-                for io in range(memory.entries):
-                    #print("states")
-                    #print(replay_buffer.memory.states[io])
-                    #print("actions")
-                    #print(replay_buffer.memory.actions[io])
-                    #print("next_states")
-                    #print(replay_buffer.memory.next_states[io])
-                    #print("done")
-                    #print(replay_buffer.memory.done[io])
-                    if (memory.records.actions[io][0] in [0,1,2]) and (blnTesting == False):
-                        agent.update_q_table(tuple(memory.records.states[io]),
-                                memory.records.actions[io][0],
-                                reward,
-                                tuple(memory.records.next_states[io]),
-                                memory.records.done[io][0])
-                #print("Updated Q table")
-                #print(agent.q_table)
-
-                for io2 in range(memory_ex.entries):
-                    if (memory_ex.records.actions[io2][0] in [3,4,5])and (blnTesting == False):
-                        agent_ex.update_q_table(tuple(memory_ex.records.states[io2]),
-                                memory_ex.records.actions[io2][0],
-                                reward,
-                                tuple(memory_ex.records.next_states[io2]),
-                                memory_ex.records.done[io2][0])
-
-                #i Save result
                 create_csv_if_not_exists(csv_filename, ['method', 'execution_time', 'status', 'actions', 'ast', 'isl_map'])
                 append_to_csv(csv_filename, ['PolyEnv-random', exec_time, status, str(actions), str(ast), str(isl_map)])
 
-            #i += 1
+            average_speedup = total_speedup/FLAGS.stop_at
+            print("Average speedup for : ", sample_name, "is ", average_speedup)
+            csv_deletename = os.path.join(FLAGS.out_dir,  '*.csv')
+            os.system('rm ' + csv_deletename)
 
     if FLAGS.with_action_import_sample_name and FLAGS.with_action_import_actions:
         env_config = {'invocations': polygym.polybench_invocations}

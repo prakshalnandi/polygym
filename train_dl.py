@@ -56,7 +56,7 @@ CONFIG= {
     "eval_freq": 1000, # HOW OFTEN WE EVALUATE (AND RENDER IF RENDER=TRUE)
     "eval_episodes": 5,
     "learning_rate": 1e-4,
-    "hidden_size": (512,256),
+    "hidden_size": (64,32),
     "target_update_freq": 500,
     "batch_size": 32,
     "gamma": 0.99,
@@ -98,27 +98,30 @@ def gen_and_bench_random_schedule(env, sample_name, agent, agent_ex, deep_agent,
         if predef_actions:
             predef_actions_idx = 0
         while not done:
-            if predef_actions:
-                action_idx = predef_actions[predef_actions_idx]
-                predef_actions_idx += 1
-            elif sampling_bias:
-                mask = state['action_mask']
-                possibilities = mask * range(len(mask))
-                if sampling_bias == 'bias_coeff0':
-                    p = mask * [1, 1, 1, 1, 0.15, 0.15]
-                elif sampling_bias == 'bias_select_dep':
-                    p = mask * [0.2, 0.2, 0.6, 1, 1, 1]
-                else:
-                    raise Exception
-                p /= p.sum()        # Normalize
-                action_idx = int(np.random.choice(possibilities, p=p))
-            else:
-                action_idx = np.random.choice(np.nonzero(state['action_mask'])[0])
+            mask = state['action_mask']
+            ##Commenting best code as this logic is replaced by an agent decision
+            #if predef_actions:
+            #    action_idx = predef_actions[predef_actions_idx]
+            #    predef_actions_idx += 1
+            #elif sampling_bias:
+            #    mask = state['action_mask']
+            #    possibilities = mask * range(len(mask))
+            #    if sampling_bias == 'bias_coeff0':
+            #        p = mask * [1, 1, 1, 1, 0.15, 0.15]
+            #    elif sampling_bias == 'bias_select_dep':
+            #        p = mask * [0.2, 0.2, 0.6, 1, 1, 1]
+            #    else:
+            #        raise Exception
+            #    p /= p.sum()        # Normalize
+            #    action_idx = int(np.random.choice(possibilities, p=p))
+            #else:
+            #    action_idx = np.random.choice(np.nonzero(state['action_mask'])[0])
             if env.status == Status.construct_space:
 
                 actList = [index for index,value in enumerate(mask) if value == 1]
                 #print("actList: ", actList)
-                action_idx = agent.choose_action(tuple(np.array(state['observation'])), actList, blnTraining)
+                #action_idx = agent.choose_action(tuple(np.array(state['observation'])), actList, blnTraining)
+                
                 deep_act = deep_agent.act(np.array(state['observation'], dtype=np.int32), actList, blnTraining)
                 #print("deep_act: ", deep_act)
                 #print("action taken: ", action_idx)
@@ -323,6 +326,7 @@ def main(argv):
             print('to_process: ' + str(to_process))
             print('len(to_process): ' + str(len(to_process)))
 
+            deep_agent.schedule_hyperparameters(i, FLAGS.stop_at)
             for sample_name in tqdm.tqdm(to_process):
 
                 if (i > FLAGS.stop_at - 2):
@@ -344,8 +348,8 @@ def main(argv):
                 #    alpha=PARAMETERS["alpha"],
                 #    epsilon=PARAMETERS["epsilon"],
                 #    )
-                #if (sample_name == 'mvt'):
-                if (i > FLAGS.stop_at - 4):
+                if (sample_name == 'mvt'):
+                #if (i > FLAGS.stop_at - 4):
                     #if (i > FLAGS.stop_at):
                     #pudb.set_trace()
                     

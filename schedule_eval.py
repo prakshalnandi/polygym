@@ -6,7 +6,8 @@ import tempfile
 import time
 import tqdm
 import subprocess
-
+import pudb
+import random
 
 class LLVMTimeoutException(Exception):
     pass
@@ -33,6 +34,8 @@ polybench_defines = ["-DPOLYBENCH_USE_C99_PROTO",
 
 
 def extract_jscop(compilation_params, config):
+    #pudb.set_trace()
+    #print("Inside extract_jscop")
     tmp_dir = tempfile.mkdtemp()
 
     cmd = [config.clang_benchmark_exe,
@@ -54,7 +57,7 @@ def extract_jscop(compilation_params, config):
 
     cmd += ["-o /dev/null"]
 
-    print(tmp_dir)
+    print("extract jscop tmp_dir: ",tmp_dir)
     print(' '.join(cmd))
 
     out = subprocess.check_output(' '.join(cmd).split(' '), cwd=tmp_dir)
@@ -86,18 +89,23 @@ def benchmark_schedule(compilation_params, config, scop_file, schedule_tree=None
         exe_name = "a.out"
     else:
         exe_name = "a_O3.out"
-
+    
+    #print("Inside benchmark_schedule")
+    ndot = scop_file.rfind(".")
+    randnum = random.randint(0,50)
+    scop_file_new = scop_file[:ndot] + "_" +str(randnum) + scop_file[ndot:]
     # Write JSCOP
     if schedule_tree:
         print('scop_file', scop_file)
         with open(scop_file) as file:
             jsonp = json.load(file)
-
+        
         jsonp["schedTree"] = str(schedule_tree).replace("\"", "\"")
 
         with open(scop_file, "w") as file:
             json.dump(jsonp, file, indent=2, sort_keys=True)
-
+    #os.system('cp ' + scop_file + " " + scop_file_new)
+    #print('new scop file : ', scop_file_new)
     # Compile
     cmd = ["timeout", "%s" % compilation_timeout,
            config.clang_benchmark_exe,
@@ -137,7 +145,7 @@ def benchmark_schedule(compilation_params, config, scop_file, schedule_tree=None
 
     cmd += ["-lm", "-lgomp", "-o", exe_name]
 
-    print(os.path.dirname(scop_file))
+    print("Benchmark Schedule tmp dir : ",os.path.dirname(scop_file))
     print(' '.join(cmd))
 
     try:

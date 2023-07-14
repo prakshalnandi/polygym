@@ -108,6 +108,7 @@ class DQN(Agent):
 
     def schedule_hyperparameters(self, timestep: int, max_timestep: int):
         self.epsilon = 1.0 - (min(1.0, timestep / (0.9 * max_timestep))) * 0.95
+        print("epsilon value for current iteration :" , self.epsilon)
         #self.epsilon = 0.5
         #raise NotImplementedError("Needed for Q3")
 
@@ -119,6 +120,8 @@ class DQN(Agent):
             arrNetwork = self.critics_target(torch.from_numpy(obs).float()).numpy()
             setDiff = np.setdiff1d(arrAllActs, arrAllowedAct)
             arrNetwork[setDiff] = np.nan
+
+            #self.schedule_hyperparameters(step,max_steps)
 
             if(explore):
                 if random.random() <= self.epsilon:

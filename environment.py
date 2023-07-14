@@ -354,7 +354,7 @@ class PolyEnv(gym.Env):
         self.uncarriedDeps = set(self.sample['deps'])
 
         self.depsDict = {self.availableDeps[i]: i for i in range(0, len(self.availableDeps))}
-        print("depsDict: ", self.depsDict)
+        #print("depsDict: ", self.depsDict)
 
         self.lstAvailableDeps = [0] * 41
         self.lstAvailableDeps[:len(self.availableDeps)] = [1] * len(self.availableDeps)
@@ -381,6 +381,7 @@ class PolyEnv(gym.Env):
         self.DepNum = 0
         self.Deps = []
         self.AddedMaps =  []
+        self.current_dep_num = 0
 
         #self.obs2 = [[None],[None]]
         self.obs2 = [[-1],[-1]]
@@ -428,7 +429,6 @@ class PolyEnv(gym.Env):
                 #'previous_coeff_vectors': [np.zeros([10])],
             })
 
-        print("dep_Rep: ", dep_rep)
         intParams = 4
         if dep_rep == 'complex_coeff':
             intParams = 211
@@ -444,7 +444,7 @@ class PolyEnv(gym.Env):
             'observation' : np.full((intParams),-1).tolist()
         }
 
-        print("state2 : ", state2)
+        #print("state2 : ", state2)
 
         self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = len(self.sample['deps']) * 2 + 1
         self.MAX_CONSECUTIVE_NEXT_DIMS = 1
@@ -478,6 +478,10 @@ class PolyEnv(gym.Env):
             return gen.lines[term_ptr - len(gen.vertices)], 'line'
         elif term_ptr < len(gen.vertices) + len(gen.lines) + len(gen.rays):
             return gen.rays[term_ptr - len(gen.vertices) - len(gen.lines)], 'ray'
+
+    def _get_terms_count(self, dim_ptr):
+        gen = self.schedulePolys[dim_ptr]
+        return len(gen.vertices) + len(gen.rays) + len(gen.lines) - 1
 
     def _calc_speedup(self, execution_time):
         return self.sample['O3_execution_time'] / execution_time
@@ -600,10 +604,15 @@ class PolyEnv(gym.Env):
 
                 self._complete_construct_maybe()
 
+                dep = self.availableDeps[self.dep_ptr]
+                self.current_dep_num = self.depsDict[dep]
+
             elif action == Action.next_dep:
                 self.dep_ptr += 1
                 if self.dep_ptr >= len(self.availableDeps):
                     self.dep_ptr = 0
+                dep = self.availableDeps[self.dep_ptr]
+                self.current_dep_num = self.depsDict[dep]
 
             elif action == Action.select_dep:
                 dep = self.availableDeps[self.dep_ptr]
@@ -624,6 +633,8 @@ class PolyEnv(gym.Env):
                 self.DepNum += 1
                 self.Deps.append(dep)
 
+                added_dep_num = self.depsDict[dep]
+                #print("dep num added : " ,added_dep_num)
                 self.lstAvailableDeps[self.depsDict[dep]] = 0
 
                 self.lstDimDeps[self.depsDict[dep]] = self.dim_ptr
@@ -635,6 +646,8 @@ class PolyEnv(gym.Env):
 
                 if self.dep_ptr >= len(self.availableDeps):
                     self.dep_ptr = 0
+
+                self.current_dep_num = self.depsDict[dep]
 
             ####self.obs[0] = self.dim_ptr
             ####self.obs[1] = self.dep_ptr
@@ -649,9 +662,15 @@ class PolyEnv(gym.Env):
             ###### array space
             #arrObs = np.array([self.obs[0],self.obs[1]])
             arrObs = np.array([self.dim_ptr])
-            
+            #arrObs = np.array([round(self.dim_ptr/len(self.sample['deps']), 3)])
+            #print("num of dims : ", len(self.schedulePolys))
             if(dep_rep == 'simple'):
-                arrObs = np.append(arrObs,self.dep_ptr)
+                #arrObs = np.append(arrObs,self.dep_ptr)
+                #print("dep num : ", self.current_dep_num)
+                #print("num of deps : ", len(self.sample['deps']))
+                #self.sample['deps']
+                ##arrObs = np.append(arrObs, self.current_dep_num)
+                arrObs = np.append(arrObs, round(self.current_dep_num/len(self.sample['deps']), 3))
             else:
                 if (len(self.availableDeps) == 0):
                     arrObs = np.append(arrObs, np.zeros((208)))
@@ -665,7 +684,9 @@ class PolyEnv(gym.Env):
                 arrObs = np.append(arrObs, np.array(self.lstCurDimDeps))
             else:
                 arrObs = np.append(arrObs, self.strongDepForDim)
+                #arrObs = np.append(arrObs, round(self.strongDepForDim/len(self.sample['deps']), 3))
                 arrObs = np.append(arrObs,len(self.availableDeps))
+                #arrObs = np.append(arrObs, round(len(self.availableDeps)/len(self.sample['deps']), 3))
             ###### array space
 
             ####self.obs[3] = len(self.availableDeps)
@@ -675,7 +696,7 @@ class PolyEnv(gym.Env):
     
             state2['observation'] = arrObs.tolist()
             #state2['observation'] = arrDep.tolist()
-            #print("state2 : ",state2['observation'])
+            #print("Construction state : ",state2['observation'])
 
             # State
             if with_repr:
@@ -702,6 +723,20 @@ class PolyEnv(gym.Env):
             term, term_type = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)
             self.obs2[0] = self.dim_ptr
             self.obs2[1] = tuple(term)
+            arrObs = np.full((53), None)
+            #arrObs = np.full((36), None)
+            #arrObs = np.full((36), 0)
+            arrObs[0] = self.dim_ptr
+            #arrObs[0] = self.dim_ptr/len(self.sample['deps'])
+            #arrObs[1] = self.term_ptr
+            #print("term length : ", self._get_terms_count(self.dim_ptr))
+            #arrObs[1] = self.term_ptr
+            arrObs[1] = round(self.term_ptr/self._get_terms_count(self.dim_ptr),3)
+            ###arrObs[2:len(term)+2] = term
+            #arrObs[2:len(term)+2] = [x/10 for x in term]
+            #arrObs = np.array([self.dim_ptr])
+            #arrObs = np.append(arrObs, self.term_ptr)
+            #arrObs = np.append(arrObs, term)
             ####print("before action obs2", self.obs2)
             # Check for illegal actions
             if self.status != Status.explore_space:
@@ -747,7 +782,8 @@ class PolyEnv(gym.Env):
                 reward, info['status'] = self._benchmark_current_schedule()
                 state_filtered = self._filter_state(state, with_repr)
                 self.nstate = self.obs2
-                state2['observation'] = self.obs2
+                #state2['observation'] = self.obs2
+                state2['observation'] = arrObs.tolist()
                 #return state_filtered, reward, True, info
                 return state2, reward, True, info
             self._skip_vertices()
@@ -790,7 +826,9 @@ class PolyEnv(gym.Env):
                     state['future_deps_by_dim'] = [[dep for dep in dim] for dim in self.schedulePolysDependences[self.dim_ptr+1:]]
 
                 self.nstate = self.obs2
-                state2['observation'] = self.obs2
+                #state2['observation'] = self.obs2
+                state2['observation'] = arrObs.tolist()
+                #print("Exploration state : ", state2['observation'])
         
         # Update action mask
         state2['action_mask'] = np.concatenate([np.ones(3), np.zeros(3)]) if self.status == Status.construct_space \
