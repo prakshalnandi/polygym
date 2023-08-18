@@ -1,7 +1,11 @@
 rm -rf /tmp/procs_out
 mkdir /tmp/procs_out
-#import time
 
+#Example to run gemm kernel
+DEP_REP=simple
+NUM_INSTANCE=2
+
+POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs python 2_train_random.py --out_dir /home/s2136718/tmp/output/gemm --with_polyenv --stop_at $NUM_INSTANCE --test_process gemm --dep_rep $DEP_REP -with_polyenv_sampling_bias bias_select_dep >> /home/s2136718/tmp/output/poly_select_dep_gemm.out 2>&1 &
 
 # PolyEnv
 #POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs OMP_NUM_THREADS=6 PYTHONPATH="" taskset -c 0-5   python train_random.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 25 --with_polyenv_sampling_bias bias_coeff0 >> /tmp/procs_out/poly_coeff0.out 2>&1 &
@@ -10,8 +14,6 @@ mkdir /tmp/procs_out
 
 ### Basic RL
 #POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs python train_random.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 5 --dep_rep complex_full -with_polyenv_sampling_bias bias_select_dep >> /tmp/procs_out/poly_select_dep.out 2>&1 &
-
-POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs srun python train_random.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 5 --dep_rep complex_full -with_polyenv_sampling_bias bias_select_dep >> /tmp/procs_out/poly_select_dep.out 2>&1 &
 
 ### Deep RL
 #POLYITEDIR=/home/s2136718/MLPC LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/s2136718/MLPC/scala-isl-utils/libs  python train_dl.py --out_dir /home/s2136718/tmp/out_bias_select_dep --with_polyenv --stop_at 1 --dep_rep complex_full -with_polyenv_sampling_bias bias_select_dep >> /tmp/procs_out/poly_select_dep.out 2>&1 &

@@ -20,6 +20,7 @@ import re
 from sympy import symbols, Poly, simplify, parsing
 import sympy
 from sympy.parsing.sympy_parser import (parse_expr, standard_transformations, implicit_multiplication)
+import math
 
 ILLEGAL_ACTION_REWARD = 0
 EXECUTION_TIME_CUTOFF_FACTOR = 1000  # Schedules beyond this factor wrt. O3 are terminated
@@ -386,6 +387,7 @@ class PolyEnv(gym.Env):
         #self.obs2 = [[None],[None]]
         self.obs2 = [[-1],[-1]]
         self.nstate = None
+        self.with_std = True 
 
         self._carry_uncarried_deps_weakly()
 
@@ -446,9 +448,10 @@ class PolyEnv(gym.Env):
 
         #print("state2 : ", state2)
 
-        self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = len(self.sample['deps']) * 2 + 1
+        #self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = len(self.sample['deps']) * 2 + 1
+        self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = len(self.sample['deps'])/2 + 1
         self.MAX_CONSECUTIVE_NEXT_DIMS = 1
-
+        #self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS = 10
         #return self._filter_state(state, with_repr)
         return state2
 
@@ -594,7 +597,7 @@ class PolyEnv(gym.Env):
 
             if action == Action.next_dim:
                 #pudb.set_trace()
-                #self._add_polyhedron()
+                self._add_polyhedron()
                 self.dim_ptr += 1
                 self.dep_ptr = 0
                 
@@ -649,44 +652,44 @@ class PolyEnv(gym.Env):
 
                 self.current_dep_num = self.depsDict[dep]
 
-            ####self.obs[0] = self.dim_ptr
-            ####self.obs[1] = self.dep_ptr
-            #self.obs[1] = self.DepNum
-            ## Num of strong deps aded in current dim
-            #self.obs[2] = self.strongDepForDim
+            ###arrObs = np.array([self.dim_ptr])
+            arrObs = np.array([self.dim_ptr/ (1 + self.dim_ptr)]) if self.with_std else np.array([self.dim_ptr])
 
-            ## stmt names for deps added in current dim
-            #self.obs[2] = tuple([(x.tupleNameIn, x.tupleNameOut) for x in self.Deps])
-            ## state as array including dependency Vector for cuurent Dep 
-            
-            ###### array space
-            #arrObs = np.array([self.obs[0],self.obs[1]])
-            arrObs = np.array([self.dim_ptr])
             #arrObs = np.array([round(self.dim_ptr/len(self.sample['deps']), 3)])
             #print("num of dims : ", len(self.schedulePolys))
             if(dep_rep == 'simple'):
                 #arrObs = np.append(arrObs,self.dep_ptr)
-                #print("dep num : ", self.current_dep_num)
-                #print("num of deps : ", len(self.sample['deps']))
-                #self.sample['deps']
-                ##arrObs = np.append(arrObs, self.current_dep_num)
-                arrObs = np.append(arrObs, round(self.current_dep_num/len(self.sample['deps']), 3))
+                ###arrObs = np.append(arrObs, self.current_dep_num)
+                arrObs = np.append(arrObs, round(self.current_dep_num/len(self.sample['deps']), 3)) if self.with_std else np.append(arrObs, self.current_dep_num)
             else:
                 if (len(self.availableDeps) == 0):
                     arrObs = np.append(arrObs, np.zeros((208)))
                 else:
                     cur_dep = self.availableDeps[self.dep_ptr]
                     bm = cur_dep.baseMap
-                    arrObs = np.append(arrObs, self._extractCoefficients(str(bm.flatten())))
+                    if self.with_std:
+                        arrDep = self._extractCoefficients(str(bm.flatten()))
+                        arrDep = np.array([1/ (1 + math.exp(-a)) for a in arrDep])
+                        arrObs = np.append(arrObs, arrDep)
+                    else:
+                        arrObs = np.append(arrObs, self._extractCoefficients(str(bm.flatten())))
 
             if 'full' in dep_rep:
-                arrObs = np.append(arrObs, np.array(self.lstAvailableDeps))
-                arrObs = np.append(arrObs, np.array(self.lstCurDimDeps))
+                if self.with_std:
+                    lstAvailableDeps = [1/ (1 + math.exp(-a)) for a in self.lstAvailableDeps]
+                    lstCurDimDeps = [1/ (1 + math.exp(-a)) for a in self.lstCurDimDeps]
+                    arrObs = np.append(arrObs, np.array(lstAvailableDeps))
+                    arrObs = np.append(arrObs, np.array(lstCurDimDeps))
+                else:
+                    arrObs = np.append(arrObs, np.array(self.lstAvailableDeps))
+                    arrObs = np.append(arrObs, np.array(self.lstCurDimDeps))
             else:
-                arrObs = np.append(arrObs, self.strongDepForDim)
-                #arrObs = np.append(arrObs, round(self.strongDepForDim/len(self.sample['deps']), 3))
-                arrObs = np.append(arrObs,len(self.availableDeps))
-                #arrObs = np.append(arrObs, round(len(self.availableDeps)/len(self.sample['deps']), 3))
+                if self.with_std:
+                    arrObs = np.append(arrObs, round(self.strongDepForDim/len(self.sample['deps']), 3))
+                    arrObs = np.append(arrObs, round(len(self.availableDeps)/len(self.sample['deps']), 3))
+                else:
+                    arrObs = np.append(arrObs, self.strongDepForDim)
+                    arrObs = np.append(arrObs,len(self.availableDeps))
             ###### array space
 
             ####self.obs[3] = len(self.availableDeps)
@@ -723,21 +726,19 @@ class PolyEnv(gym.Env):
             term, term_type = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)
             self.obs2[0] = self.dim_ptr
             self.obs2[1] = tuple(term)
-            arrObs = np.full((53), None)
-            #arrObs = np.full((36), None)
-            #arrObs = np.full((36), 0)
-            arrObs[0] = self.dim_ptr
+            if(dep_rep != 'simple'):
+                arrObs = np.full((950), None)
+            else:
+                arrObs = np.full((2), None)
+            ###arrObs[0] = self.dim_ptr
+            arrObs[0] = self.dim_ptr/ (1 + self.dim_ptr) if self.with_std else self.dim_ptr 
             #arrObs[0] = self.dim_ptr/len(self.sample['deps'])
             #arrObs[1] = self.term_ptr
-            #print("term length : ", self._get_terms_count(self.dim_ptr))
             #arrObs[1] = self.term_ptr
-            arrObs[1] = round(self.term_ptr/self._get_terms_count(self.dim_ptr),3)
+            arrObs[1] = round(self.term_ptr/self._get_terms_count(self.dim_ptr),3) if self.with_std else self.term_ptr
             ###arrObs[2:len(term)+2] = term
-            #arrObs[2:len(term)+2] = [x/10 for x in term]
-            #arrObs = np.array([self.dim_ptr])
-            #arrObs = np.append(arrObs, self.term_ptr)
-            #arrObs = np.append(arrObs, term)
-            ####print("before action obs2", self.obs2)
+            if(dep_rep != 'simple'):
+                arrObs[2:len(term)+2] = np.array([1/ (1 + math.exp(-a)) for a in term]) if self.with_std else term
             # Check for illegal actions
             if self.status != Status.explore_space:
                 raise Exception
@@ -771,6 +772,16 @@ class PolyEnv(gym.Env):
                 reward = 0
 
             #print("coeff and summand:", self.coeffs_and_summands_by_dim[self.dim_ptr])
+            coeff_vectors = [self._summands_to_coeff_vector([summand for _, summand in coeffs_and_summands]) for
+                                 coeffs_and_summands in self.coeffs_and_summands_by_dim]
+            if(dep_rep != 'simple'):
+                if self.with_std:
+                    std_coeff_vecs = [[1/ (1 + math.exp(-a)) for a in b] for b in coeff_vectors]
+                else:
+                    std_coeff_vecs = [[a for a in b] for b in coeff_vectors]
+                std_coeff_vecs = [item for sublist in std_coeff_vecs for item in sublist]
+                arrObs[53:len(std_coeff_vecs)+53] = np.array(std_coeff_vecs)
+
             # Update ptrs for next step
             self.dim_ptr, self.term_ptr = self._get_incremented_ptrs(self.dim_ptr, self.term_ptr)
             done_explore = self.dim_ptr >= len(self.schedulePolys)
@@ -790,22 +801,22 @@ class PolyEnv(gym.Env):
 
             # State
             if with_repr:
-                coeff_vectors = [self._summands_to_coeff_vector([summand for _, summand in coeffs_and_summands]) for
-                                 coeffs_and_summands in self.coeffs_and_summands_by_dim]
+                ###coeff_vectors = [self._summands_to_coeff_vector([summand for _, summand in coeffs_and_summands]) for
+                ###                 coeffs_and_summands in self.coeffs_and_summands_by_dim]
                 #self.obs2[0] = coeff_vectors[self.dim_ptr]
-                state['current_coeff_vector'] = coeff_vectors[self.dim_ptr]
-                state['current_term_candidate_vector'] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
+                ###state['current_coeff_vector'] = coeff_vectors[self.dim_ptr]
+                ###state['current_term_candidate_vector'] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
                 #self.obs2[1] = self._get_term_by_ptr(self.dim_ptr, self.term_ptr)[0]
                 #print("after action obs2", self.obs2)
 
-                previous_deps_by_dim = self.schedulePolysDependences[:self.dim_ptr]
-                if len(previous_deps_by_dim) > 0:
+                ###previous_deps_by_dim = self.schedulePolysDependences[:self.dim_ptr]
+                ###if len(previous_deps_by_dim) > 0:
                     #commentdep state['previous_deps_by_dim'] = [[self.sample['dep_reps_by_deps'][dep] for dep in dim] for dim in previous_deps_by_dim]
-                    state['previous_deps_by_dim'] = [[dep for dep in dim] for dim in previous_deps_by_dim]
+                ###    state['previous_deps_by_dim'] = [[dep for dep in dim] for dim in previous_deps_by_dim]
 
-                previous_coeff_vectors = coeff_vectors[:self.dim_ptr]
-                if len(previous_coeff_vectors) > 0:
-                    state['previous_coeff_vectors'] = previous_coeff_vectors
+                ###previous_coeff_vectors = coeff_vectors[:self.dim_ptr]
+                ###if len(previous_coeff_vectors) > 0:
+                ###    state['previous_coeff_vectors'] = previous_coeff_vectors
 
                 #next_terms commented by s2136718
                 #next_terms = []
@@ -816,14 +827,14 @@ class PolyEnv(gym.Env):
                 #        next_terms.append(ray)
                 #state['next_terms'] = next_terms
 
-                current_dim_deps = [dep for dep in self.schedulePolysDependences[self.dim_ptr]]
+                ###current_dim_deps = [dep for dep in self.schedulePolysDependences[self.dim_ptr]]
                 #commentdep by s2136718 current_dim_deps = [self.sample['dep_reps_by_deps'][dep] for dep in self.schedulePolysDependences[self.dim_ptr]]
-                if len(current_dim_deps) > 0:
-                    state['current_dim_deps'] = current_dim_deps
+                ###if len(current_dim_deps) > 0:
+                ###    state['current_dim_deps'] = current_dim_deps
 
-                if (self.dim_ptr + 1) < len(self.schedulePolys):
+                ###if (self.dim_ptr + 1) < len(self.schedulePolys):
                     #commentdep by s2136718 state['future_deps_by_dim'] = [[self.sample['dep_reps_by_deps'][dep] for dep in dim] for dim in self.schedulePolysDependences[self.dim_ptr+1:]]
-                    state['future_deps_by_dim'] = [[dep for dep in dim] for dim in self.schedulePolysDependences[self.dim_ptr+1:]]
+                ###    state['future_deps_by_dim'] = [[dep for dep in dim] for dim in self.schedulePolysDependences[self.dim_ptr+1:]]
 
                 self.nstate = self.obs2
                 #state2['observation'] = self.obs2
@@ -842,10 +853,12 @@ class PolyEnv(gym.Env):
         if self.consecutive_next_dims >= self.MAX_CONSECUTIVE_NEXT_DIMS:
             state2['action_mask'][Action.next_dim.value] = 0
 
-        self.consecutive_next_dep_actions = self.consecutive_next_dep_actions + 1 if action == Action.next_dep else 0
-        
+        #self.consecutive_next_dep_actions = self.consecutive_next_dep_actions + 1 if action == Action.next_dep else 0
+        self.consecutive_next_dep_actions = self.consecutive_next_dep_actions + 1 if not action == Action.select_dep else 0
+
         if self.consecutive_next_dep_actions > self.MAX_CONSECUTIVE_NEXT_DEP_ACTIONS:
             state2['action_mask'][Action.next_dep.value] = 0
+            state2['action_mask'][Action.next_dim.value] = 0
 
         if state2['action_mask'][Action.select_dep.value] == 1 and len(self.availableDeps) > 0 and not self._can_dep_be_carried_strongly(self.availableDeps[self.dep_ptr]):
             state2['action_mask'][Action.select_dep.value] = 0
